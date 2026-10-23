@@ -46,9 +46,11 @@ pass the exact destination to the installer:
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
 
-For the separate skill archive, extract it and copy the complete `structuralist`
-directory into your agent's skill location, preserving all its contents. The
-source-checkout installer remains the route for automatic copy and `--check`.
+For the separate skill archive, extract it and enter `structuralist-2026.10.20/`.
+Run the same `./distribution/install-structuralist.sh` and `--check` commands
+there. The archive includes its installer and license notices. For manual
+installation, copy its complete `skills/structuralist/` directory into your
+agent's skill location, preserving any existing installation.
 
 Confirm that the agent discovers the skill. If it does not appear, refresh or
 restart the agent. Installing the package changes future agent capability only;
