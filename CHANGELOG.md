@@ -4,7 +4,7 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 laboratory whose public release is deferred.
 
-## 2026.10.20 — Source beta candidate (unreleased)
+## [2026.10.20](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20) — Source beta prerelease
 
 - Uses ordinary paths and one `MINDFLOW.yaml` in format `2026-10-20` for
   explicit registrations, relationships, Opening, Events, and Anchors.
@@ -15,10 +15,15 @@ laboratory whose public release is deferred.
   inline images, folder-only Structure views, graph-render failure recovery,
   minimap navigation, and dialog keyboard focus.
 - Replaces obsolete public guides and screenshots with a small current manual.
-- Records exact committed source provenance and ships portable tests and CI.
+- Records exact committed source provenance and ships portable tests and a
+  GitHub Actions workflow. Hosted workflow results are reported by GitHub.
 - Provides CLI-first source installation; no macOS application download is
   required. Optional GUI source remains included. SSH is not a supported beta
   installation route. See the guides for remaining performance limitations.
+
+Source and standalone Structuralist archives are available from the prerelease
+page, with checksums for the convenience assets. No prebuilt application is
+included.
 
 The older format is not loaded automatically. `mindflow version --json` and
 `mindflow update-handoff` support a deliberate manual adoption review.

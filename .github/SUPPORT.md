@@ -1,9 +1,9 @@
 # Support
 
-Mindflow `2026.10.20` is a source beta candidate with best-effort community
-support. After this repository is published, use its Issues tab for defects,
-documentation gaps, and focused feedback. A local candidate is not a published
-release or a supported binary download.
+Mindflow [2026.10.20](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20) is a source beta prerelease with
+best-effort community support. Use [GitHub Issues](https://github.com/bearxiong2k/Mindflow/issues)
+for defects, documentation gaps, and focused feedback. No supported binary
+download is provided.
 
 Read [Installation](../docs/installation.md) first. Include `mindflow --version`,
 this checkout's Git revision, OS, the affected command/view, expected behavior,

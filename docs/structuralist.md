@@ -11,7 +11,8 @@ Core, CLI, and GUI work without it.
 
 ## Install the complete package
 
-Source release `2026.10.20` includes:
+The [2026.10.20 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20) includes the complete package
+in its source and offers a separate skill archive:
 
 ```text
 skills/structuralist/
@@ -44,6 +45,10 @@ pass the exact destination to the installer:
 ```sh
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
+
+For the separate skill archive, extract it and copy the complete `structuralist`
+directory into your agent's skill location, preserving all its contents. The
+source-checkout installer remains the route for automatic copy and `--check`.
 
 Confirm that the agent discovers the skill. If it does not appear, refresh or
 restart the agent. Installing the package changes future agent capability only;

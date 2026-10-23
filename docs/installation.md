@@ -1,9 +1,21 @@
 # Installation
 
-The `2026.10.20` beta candidate is a source release. Public GitHub publication
-is pending; these instructions start from this source checkout or an extracted
-source archive. Convenience assets can contain source and the complete
-Structuralist package; they are not prebuilt native applications.
+The [2026.10.20 beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20) ships source and the complete
+Structuralist package. It does not provide prebuilt native applications.
+
+## Get the source
+
+Clone the public repository at the release tag:
+
+```sh
+git clone --branch v2026.10.20 https://github.com/bearxiong2k/Mindflow.git
+cd Mindflow
+```
+
+Alternatively, download and extract the [tagged source archive](https://github.com/bearxiong2k/Mindflow/archive/refs/tags/v2026.10.20.tar.gz)
+or the source asset from the [prerelease page](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20), then open a terminal
+in its extracted root. Use the tagged Git checkout for the optional GUI build
+and for Git-history inspection.
 
 ## CLI
 
@@ -66,8 +78,7 @@ neither initializes nor authorizes changes to a consuming project. See
 ## Optional local GUI
 
 The current source-linked GUI workflow requires a Git checkout with at least
-one commit, macOS 12 or newer, Xcode
-Command Line Tools, the Rust prerequisites above, and Node.js `22.12` or newer
+one commit, macOS 12 or newer, Xcode Command Line Tools, the Rust prerequisites above, and Node.js `22.12` or newer
 with npm. The GUI uses Tauri; serving the frontend alone does not provide a
 working project application.
 

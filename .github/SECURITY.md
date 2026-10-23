@@ -3,12 +3,12 @@
 Only the current source beta is maintained; historical snapshots are not
 separate supported branches. Fixes may change preview interfaces.
 
-Use this public repository's **Security → Report a vulnerability** facility
-when it is enabled. Do not include secrets, private project data, or suspected
-vulnerability details in a public issue. Before publication, a reporting channel
-must be enabled and verified; this local candidate does not claim that one is
-already available. Maintainers provide best-effort handling without a promised
-response time.
+Use GitHub's [private vulnerability reporting](https://github.com/bearxiong2k/Mindflow/security/advisories/new)
+for this repository. If that facility is unavailable, open an
+issue requesting a private contact without describing the vulnerability. Do
+not include secrets, private project data, or vulnerability details in public
+issues. Maintainers provide best-effort handling without a promised response
+time.
 
 Include the affected revision or `release-source.json`, OS, impact, and a
 minimal reproduction. Structural validation checks Mindflow's project model;

@@ -1,8 +1,8 @@
 # Mindflow guides
 
-These guides describe the `2026.10.20` source beta candidate and project format
-`2026-10-20`. Public publication is pending. No guide requires access to the
-private development laboratory.
+These guides describe the [2026.10.20 source beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20)
+and project format `2026-10-20`. No guide requires access to the private
+development laboratory.
 
 | Guide | Purpose |
 | --- | --- |

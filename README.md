@@ -5,10 +5,9 @@ meaning alongside ordinary files and Git. It selects useful files and folders,
 keeps their names and hierarchy grounded in the filesystem, and adds stable
 identities, sparse relationships, and an explicit account of what remains open.
 
-**`2026.10.20` source beta candidate.** This checkout is prepared for a first
-public release; it has not been published. A distinct public GitHub destination
-is still pending. The first release is source-only and requires no packaged
-macOS download.
+**[2026.10.20 source beta](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20)** is a GitHub prerelease.
+It includes source and the optional Structuralist skill; no packaged macOS
+download is required.
 
 ## What it provides
 
@@ -27,9 +26,11 @@ system. It creates no background process or additional project state.
 
 ## Try the CLI
 
-From this source checkout, with Git and the pinned Rust toolchain available:
+With Git and the Rust build prerequisites in [Installation](docs/installation.md):
 
 ```sh
+git clone --branch v2026.10.20 https://github.com/bearxiong2k/Mindflow.git
+cd Mindflow
 cargo install --locked --path . --bin mindflow
 mindflow --version
 if [ ! -e .git ]; then git init; fi
@@ -38,7 +39,9 @@ mindflow topology probe docs --depth 1 --max-nodes 128 --mermaid
 mindflow topology read docs/semantics.md
 ```
 
-If this source came from an archive, the conditional command creates the Git
+You can also download the [source archive](https://github.com/bearxiong2k/Mindflow/archive/refs/tags/v2026.10.20.tar.gz) or choose
+source and skill assets from the [prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20). From an extracted source
+root, start at `cargo install` above. The conditional command creates the Git
 worktree needed to inspect its bundled Region; it leaves an existing `.git`
 entry untouched. Cargo installation itself does not require Git history.
 
@@ -69,7 +72,7 @@ and other agent environments.
 
 ## Release boundary
 
-This candidate uses project format **`2026-10-20`**. Older formats, including
+This release uses project format **`2026-10-20`**. Older formats, including
 those used by the `0.1.0` preview, require reviewed manual adoption through
 `mindflow update-handoff`; there is no automatic migration. The historical
 `integrate-mindflow` package is not the current methodology package.
