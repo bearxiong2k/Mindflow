@@ -1,0 +1,27 @@
+[package]
+name = "mindflow"
+version = "2026.10.20"
+edition = "2021"
+rust-version = "1.85"
+description = "Project structure and SOE over ordinary files for maintainable natural-language project systems"
+license = "MPL-2.0"
+repository = "https://github.com/bearxiong2k/Mindflow"
+homepage = "https://github.com/bearxiong2k/Mindflow"
+publish = false
+
+[dependencies]
+anyhow = "=1.0.100"
+base64 = "=0.22.1"
+clap = { version = "=4.5.23", features = ["derive"] }
+# Root-confined Unix reads open every component descriptor-relatively without
+# following symbolic links. Other platforms retain lexical and canonical checks.
+libc = "=0.2.189"
+# Atomic manifest publication uses an operating-system lock. The dependency does
+# not contribute project semantics or a persistent run ledger.
+fs2 = "=0.4.3"
+# Keep the YAML parser's map dependency fixed across the source preview.
+indexmap = "=2.7.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.145"
+serde_norway = "=0.9.42"
+sha2 = "=0.10.9"

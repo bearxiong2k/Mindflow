@@ -1,0 +1,6 @@
+interface:
+  display_name: "Structuralist"
+  short_description: "Locate and evolve project language systems"
+  default_prompt: "Use $structuralist to understand this project, locate its project-level natural-language system, and evolve it through relevant structural patterns."
+policy:
+  allow_implicit_invocation: false

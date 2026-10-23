@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+sync_script="$repo_root/gui/scripts/sync-local-app.sh"
+cli_path="$repo_root/target/release/mindflow"
+
+if [[ ! -x "$sync_script" ]]; then
+  echo "error: local toolchain checker is missing or not executable: $sync_script" >&2
+  echo "checkout: $repo_root" >&2
+  echo "synchronize: cd \"$repo_root/gui\" && npm run sync:local" >&2
+  exit 1
+fi
+
+"$sync_script" --check --quiet
+exec "$cli_path" "$@"

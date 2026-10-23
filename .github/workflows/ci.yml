@@ -1,0 +1,38 @@
+name: Source beta checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: cargo test --locked
+      - run: cargo install --locked --path . --bin mindflow --root "$RUNNER_TEMP/mindflow-install"
+      - run: '"$RUNNER_TEMP/mindflow-install/bin/mindflow" --version'
+      - run: '"$RUNNER_TEMP/mindflow-install/bin/mindflow" check --json'
+      - run: ./distribution/test-install-structuralist.sh
+      - run: ./distribution/verify-structuralist-package.sh
+        env:
+          MINDFLOW_BIN: ${{ runner.temp }}/mindflow-install/bin/mindflow
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:frontend
+      - run: npm run build:frontend

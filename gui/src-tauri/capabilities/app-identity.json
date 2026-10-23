@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "visible-app-identity",
+  "description": "Allow Mindflow workspace and Reader windows to distinguish the development bundle for its visible watermark.",
+  "windows": ["main", "workspace-*", "reader-*"],
+  "permissions": ["core:app:allow-identifier"]
+}

@@ -1,0 +1,87 @@
+.project-map-canvas.has-structure-metrics {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.structure-metrics-toggle { grid-column: 1; grid-row: 1; }
+.structure-metrics-toggle.is-active {
+  border-color: var(--color-structure);
+  background: var(--color-structure-soft);
+  color: var(--color-structure-strong);
+}
+.structure-metrics-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.45rem 0.72rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: #42556c;
+  font-size: 0.69rem;
+}
+.structure-metrics-bar label {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+.structure-metrics-bar select {
+  max-width: 9rem;
+  padding: 0.24rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+.structure-metrics-status { display: grid; min-width: 0; gap: 0.16rem; }
+.structure-metrics-status small { font-size: 0.61rem; color: var(--muted); }
+.structure-metrics-status [role="alert"] { overflow-wrap: anywhere; }
+.structure-metrics-total { display: flex; flex-wrap: wrap; gap: 0.6rem; font-variant-numeric: tabular-nums; }
+.structure-metrics-total strong { font-weight: 650; }
+.structure-metrics-status button { font: inherit; cursor: pointer; }
+.structure-metrics-bar select:focus-visible, .structure-metrics-status button:focus-visible {
+  outline: 2px solid var(--color-structure);
+  outline-offset: 2px;
+}
+/* These colors describe numeric movement only, leaving SOE outlines and fills intact. */
+.structure-metrics-key { display: flex; flex-wrap: wrap; gap: 0.3rem 0.55rem; margin-left: auto; font-size: 0.65rem; }
+.structure-metrics-key span { white-space: nowrap; font-weight: 600; }
+.structure-metrics-key [data-trend="growth"] { color: #2878b8; }
+.structure-metrics-key [data-trend="shrink"] { color: #8b5fb5; }
+.structure-metrics-key [data-trend="flat"] { color: #6d7d8b; }
+.project-map-metric-chart { pointer-events: none; }
+.structure-node-tooltip {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  display: grid;
+  gap: 0.35rem;
+  width: 306px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0.8rem;
+  border: 1px solid #cbd7e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #32475c;
+  box-shadow: 0 8px 30px rgb(28 49 71 / 18%);
+  font-size: 0.71rem;
+  line-height: 1.4;
+}
+.structure-node-tooltip__title { font-size: 0.8rem; overflow-wrap: anywhere; }
+.structure-node-tooltip__path { font-size: 0.64rem; color: #677b8e; overflow-wrap: anywhere; }
+.structure-node-tooltip__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; padding: 0.5rem 0; border-bottom: 1px solid #e6ebf0; }
+.structure-node-tooltip__stats > span { display: grid; gap: 0.1rem; }
+.structure-node-tooltip__stats strong { font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.structure-node-tooltip small { color: #6a7c8d; font-size: 0.62rem; }
+.structure-node-tooltip p { margin: 0.2rem 0; font-size: 0.65rem; }
+.structure-node-tooltip[data-direction="growth"] .structure-node-tooltip__stats > span:last-child strong { color: #2878b8; }
+.structure-node-tooltip[data-direction="shrink"] .structure-node-tooltip__stats > span:last-child strong { color: #8b5fb5; }
+.structure-node-tooltip[data-direction="flat"] .structure-node-tooltip__stats > span:last-child strong { color: #6d7d8b; }
+@media (max-width: 900px) {
+  .structure-metrics-bar { align-items: start; flex-wrap: wrap; gap: 0.45rem 0.6rem; }
+  .structure-metrics-key { margin-left: 0; }
+  .structure-metrics-bar label { flex-direction: column; align-items: start; gap: 0.2rem; }
+}

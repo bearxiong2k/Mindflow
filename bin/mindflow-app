@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+sync_script="$repo_root/gui/scripts/sync-local-app.sh"
+identity_script="$repo_root/gui/scripts/local-app-identity.sh"
+
+if [[ ! -r "$identity_script" ]]; then
+  echo "error: local app identity resolver is missing: $identity_script" >&2
+  exit 1
+fi
+# shellcheck source=../gui/scripts/local-app-identity.sh
+source "$identity_script"
+bundle_path="$local_app_bundle_path"
+
+if [[ ! -x "$sync_script" ]]; then
+  echo "error: local toolchain checker is missing or not executable: $sync_script" >&2
+  echo "checkout: $repo_root" >&2
+  echo "synchronize: cd \"$repo_root/gui\" && npm run sync:local" >&2
+  exit 1
+fi
+
+"$sync_script" --check --quiet
+
+window_mode="reuse"
+window_mode_selected=false
+starting_paths=()
+parse_options=true
+while (($# > 0)); do
+  if $parse_options; then
+    case "$1" in
+      --new-window)
+        if $window_mode_selected; then
+          echo "error: choose exactly one of --reuse-window and --new-window" >&2
+          exit 2
+        fi
+        window_mode="new"
+        window_mode_selected=true
+        shift
+        continue
+        ;;
+      --reuse-window)
+        if $window_mode_selected; then
+          echo "error: choose exactly one of --reuse-window and --new-window" >&2
+          exit 2
+        fi
+        window_mode="reuse"
+        window_mode_selected=true
+        shift
+        continue
+        ;;
+      --)
+        parse_options=false
+        shift
+        continue
+        ;;
+      --*)
+        echo "error: unsupported Mindflow app option '$1'" >&2
+        echo "usage: $0 [--reuse-window | --new-window] [--] [PATH ...]" >&2
+        exit 2
+        ;;
+    esac
+  fi
+  starting_path="$1"
+  if [[ "$starting_path" == /* ]]; then
+    starting_paths+=("$starting_path")
+  else
+    starting_paths+=("$PWD/$starting_path")
+  fi
+  shift
+done
+
+launch_arguments=(--mindflow-window-mode "$window_mode")
+if ((${#starting_paths[@]} == 0)); then
+  launch_arguments+=(--mindflow-caller-cwd "$PWD")
+else
+  launch_arguments+=("${starting_paths[@]}")
+fi
+
+exec open -n "$bundle_path" --args "${launch_arguments[@]}"

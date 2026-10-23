@@ -1,0 +1,28 @@
+format: "2026-10-20"
+adopted-release: "2026.10.20"
+components:
+  readme: {path: README.md}
+  docs: {path: docs}
+  docs_index: {path: docs/README.md, index: true}
+  installation: {path: docs/installation.md}
+  quick_start: {path: docs/quick-start.md}
+  cli: {path: docs/cli.md}
+  gui: {path: docs/gui.md}
+  project_format: {path: docs/project-format.md}
+  semantics: {path: docs/semantics.md}
+  rationale: {path: docs/rationale.md}
+  structuralist: {path: docs/structuralist.md}
+  tutorial: {path: docs/tutorial}
+  tutorial_index: {path: docs/tutorial/README.md, index: true}
+relationship-types:
+  explains:
+    description: The source guide explains the target's context or use.
+    direction: directional
+relationships:
+  - {source: installation, type: explains, direction: source-to-target, target: quick_start}
+  - {source: semantics, type: explains, direction: source-to-target, target: project_format}
+  - {source: structuralist, type: explains, direction: source-to-target, target: quick_start}
+opening:
+  files: []
+evolve:
+  events: []

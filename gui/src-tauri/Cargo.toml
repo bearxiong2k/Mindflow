@@ -1,0 +1,23 @@
+[package]
+name = "mindflow-desktop"
+version = "2026.10.20"
+edition = "2021"
+rust-version = "1.85"
+license = "MPL-2.0"
+repository = "https://github.com/bearxiong2k/Mindflow"
+publish = false
+
+[lib]
+name = "mindflow_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+mindflow = { path = "../.." }
+rfd = "=0.17.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.145"
+tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }
+tauri-plugin-single-instance = "=2.4.3"
