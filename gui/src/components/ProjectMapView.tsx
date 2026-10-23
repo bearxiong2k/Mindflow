@@ -642,13 +642,25 @@ export function ProjectMapView({
       ),
     [layoutDirection, projection, textScale, metrics],
   );
+  const preparedGraphs = useMemo(() => new Map<string, ProjectMapMermaidGraph>(), [
+    map, opening, relationshipTypes, reversedLayoutFocusIds, textScale, viewingDepthsByFocusId, metrics,
+  ]);
+  useEffect(() => { setIntentPreloadGraph(undefined); }, [focusId, preparedGraphs]);
   const prepareComponentGraph = useCallback(
-    (component: ProjectComponent, expandedRegionDepth?: number) => {
+    (component?: ProjectComponent, expandedRegionDepth?: number) => {
       if (
+        !component ||
         component.id === focusId ||
         !projectMapComponentIsAggregate(component) ||
         (childrenByParent.get(component.id)?.length ?? 0) === 0
       ) {
+        setIntentPreloadGraph(undefined);
+        return;
+      }
+      const key = `${component.id}\u0000${expandedRegionDepth ?? "preferred"}`;
+      const cached = preparedGraphs.get(key);
+      if (cached) {
+        setIntentPreloadGraph(cached);
         return;
       }
       const maximumDepth = projectMapMaximumDepth(
@@ -683,9 +695,9 @@ export function ProjectMapView({
         textScale,
         metrics,
       );
-      setIntentPreloadGraph((current) =>
-        current?.source === preparedGraph.source ? current : preparedGraph,
-      );
+      preparedGraphs.set(key, preparedGraph);
+      if (preparedGraphs.size > 24) preparedGraphs.delete(preparedGraphs.keys().next().value!);
+      setIntentPreloadGraph(preparedGraph);
     },
     [
       childrenByParent,
@@ -697,6 +709,7 @@ export function ProjectMapView({
       textScale,
       viewingDepthsByFocusId,
       metrics,
+      preparedGraphs,
     ],
   );
   const currentRenderedGraph =

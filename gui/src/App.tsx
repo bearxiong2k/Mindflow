@@ -16,7 +16,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import {
-  closeReaderWindows,
+  closeProject,
   browserFixtureActive,
   chooseRegion,
   createProjectWindow,
@@ -37,6 +37,7 @@ import {
 import { ControlBar } from "./components/ControlBar";
 import { ProjectFilesView } from "./components/ProjectFilesView";
 import { ProjectMapView } from "./components/ProjectMapView";
+import { useTimelineHistory } from "./useTimelineHistory";
 import { useStructureMetrics } from "./useStructureMetrics";
 import { useWorkspaceReload } from "./workspaceReload";
 import { RegionOverview } from "./components/RegionOverview";
@@ -614,6 +615,7 @@ const RegionWorkspace = forwardRef<
       : current?.source === "files" ? undefined : current);
   }, [filesNavigationIndex]);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const timelineHistory = useTimelineHistory(region, timelineOpen);
   const [qcOpen, setQcOpen] = useState(false);
   const workspaceElement = useRef<HTMLDivElement>(null);
   const navigateFromFiles = useCallback((path: string) => {
@@ -1246,7 +1248,10 @@ const RegionWorkspace = forwardRef<
                     <TimelineView
                       graph={graph}
                       anchorTimeline={region.anchor_timeline}
-                      commits={region.timeline_commits}
+                      commits={timelineHistory.commits}
+                      historyLoading={timelineHistory.loading}
+                      historyError={timelineHistory.error}
+                      onRetryHistory={timelineHistory.retry}
                       panelLayout={timelinePanels}
                       foldRanges={timelineFoldRanges}
                       foldSelection={timelineFoldSelection}
@@ -1531,7 +1536,7 @@ export default function App() {
     (tabId: string) => {
       const tab = tabState.tabs.find((candidate) => candidate.id === tabId);
       if (tab?.kind === "region" || tab?.kind === "folder") {
-        void closeReaderWindows(tab.root).catch((error: unknown) =>
+        void closeProject(tab.root).catch((error: unknown) =>
           setAppError(errorMessage(error)),
         );
       }

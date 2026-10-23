@@ -88,6 +88,8 @@ gui/src/interactionGeometry.ts
 gui/src/interfaceHelp.test.mjs
 gui/src/interfaceHelp.ts
 gui/src/main.tsx
+gui/src/mermaidRenderQueue.test.mjs
+gui/src/mermaidRenderQueue.ts
 gui/src/mermaidRendering.ts
 gui/src/mermaidRuntime.ts
 gui/src/openingPresentation.ts
@@ -121,11 +123,15 @@ gui/src/sshBrowser.test.mjs
 gui/src/sshBrowser.ts
 gui/src/structureMetrics.css
 gui/src/styles.css
+gui/src/textLayout.test.mjs
+gui/src/textLayout.ts
+gui/src/timelineHistory.test.mjs
 gui/src/timelineInteraction.ts
 gui/src/timelineSelectionOverlay.test.mjs
 gui/src/timelineSelectionOverlay.ts
 gui/src/types.ts
 gui/src/useStructureMetrics.ts
+gui/src/useTimelineHistory.ts
 gui/src/versionInfo.test.mjs
 gui/src/versionInfo.ts
 gui/src/workspaceReload.test.mjs

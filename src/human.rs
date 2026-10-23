@@ -16,7 +16,7 @@ use crate::{Diagnostic, Project, Severity};
 pub const READER_TEXT_MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub const READER_IMAGE_MAX_BYTES: u64 = 32 * 1024 * 1024;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegionResponse {
     pub root: String,
     pub project: String,
@@ -26,6 +26,7 @@ pub struct RegionResponse {
     pub opening: Opening,
     pub anchor_timeline: Vec<AnchorTimelineSlice>,
     pub timeline_commits: Vec<TimelineCommit>,
+    pub timeline_history_loaded: bool,
     pub version: crate::version::ProjectVersion,
 }
 
@@ -144,7 +145,8 @@ pub fn region_response(project: &Project) -> Result<RegionResponse, String> {
     let status = project.status();
     let opening = project.opening();
     let anchor_timeline = project.anchor_timeline();
-    let timeline_commits = project.timeline_commits();
+    // Git history is a separate, snapshot-qualified Timeline request.
+    let timeline_commits = Vec::new();
     let name = project_label(&project.root);
 
     Ok(RegionResponse {
@@ -156,7 +158,23 @@ pub fn region_response(project: &Project) -> Result<RegionResponse, String> {
         opening,
         anchor_timeline,
         timeline_commits,
+        timeline_history_loaded: false,
         version: crate::version::ProjectVersion::from_project(project),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimelineHistoryResponse {
+    pub root: String,
+    pub snapshot: SnapshotIdentity,
+    pub commits: Vec<TimelineCommit>,
+}
+
+pub fn timeline_history(project: &Project) -> Result<TimelineHistoryResponse, String> {
+    Ok(TimelineHistoryResponse {
+        root: project.root.display().to_string(),
+        snapshot: project.snapshot_identity().clone(),
+        commits: project.timeline_commits().map_err(|error| format!("{error:#}"))?,
     })
 }
 

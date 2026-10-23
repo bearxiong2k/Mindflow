@@ -1,6 +1,6 @@
 # Mindflow format `2026-10-20` adoption handoff
 
-Source release `2026.10.20` accepts project format `2026-10-20` only.
+Source release `2026.10.24` accepts project format `2026-10-20` only.
 Adoption is a reviewed manual project change; there is no migration command or
 backward compatibility mode.
 
@@ -17,8 +17,8 @@ mindflow version --json
 mindflow update-handoff
 ```
 
-The version output must identify release `2026.10.20`, project format
-`2026-10-20`, and bridge protocol `6`. Version reporting and `update-handoff`
+The version output must identify release `2026.10.24`, project format
+`2026-10-20`, and bridge protocol `7`. Version reporting and `update-handoff`
 work from an older project even when its manifest cannot load; do not pass
 `--root` to `update-handoff`. If PATH selects another checkout, invoke the
 intended installed executable by its exact path throughout this handoff.
@@ -32,7 +32,7 @@ Mindflow executable does not update a consuming project's files.
 
 ## Choose the adoption path
 
-After reviewing and validating adoption, record `adopted-release: "2026.10.20"`
+After reviewing and validating adoption, record `adopted-release: "2026.10.24"`
 at the manifest root. This records the release the project chose; it is separate
 from `format` and never updated just by launching a newer app or CLI. Existing
 current-format projects without this field need only this explicit provenance

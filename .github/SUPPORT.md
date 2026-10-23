@@ -1,6 +1,6 @@
 # Support
 
-Mindflow [2026.10.20](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20) is a source beta prerelease with
+Mindflow [2026.10.24](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.24) is a source beta prerelease with
 best-effort community support. Use [GitHub Issues](https://github.com/bearxiong2k/Mindflow/issues)
 for defects, documentation gaps, and focused feedback. No supported binary
 download is provided.

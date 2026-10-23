@@ -170,6 +170,7 @@ export interface RegionResponse {
   opening: Opening;
   anchor_timeline: AnchorTimelineSlice[];
   timeline_commits: TimelineCommit[];
+  timeline_history_loaded?: boolean;
 }
 
 export interface FolderResponse {
@@ -285,4 +286,10 @@ export function timelineIdentitiesForPaths(graph: GraphData, paths: readonly str
     }
   }
   return [...identities];
+}
+
+export interface TimelineHistoryResponse {
+  root: string;
+  snapshot: SnapshotIdentity;
+  commits: TimelineCommit[];
 }

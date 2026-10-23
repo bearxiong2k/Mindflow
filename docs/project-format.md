@@ -6,11 +6,11 @@ entry kinds, and hierarchy. [Semantics](semantics.md) explains their meaning.
 
 ## Empty Region
 
-`mindflow init` writes this empty carrier for release `2026.10.20`:
+`mindflow init` writes this empty carrier for release `2026.10.24`:
 
 ```yaml
 format: "2026-10-20"
-adopted-release: "2026.10.20"
+adopted-release: "2026.10.24"
 components: {}
 relationship-types: {}
 relationships: []
@@ -35,7 +35,7 @@ complete manifest:
 
 ```yaml
 format: "2026-10-20"
-adopted-release: "2026.10.20"
+adopted-release: "2026.10.24"
 components:
   overview:
     path: README.md

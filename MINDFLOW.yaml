@@ -1,5 +1,5 @@
 format: "2026-10-20"
-adopted-release: "2026.10.20"
+adopted-release: "2026.10.24"
 components:
   readme: {path: README.md}
   docs: {path: docs}

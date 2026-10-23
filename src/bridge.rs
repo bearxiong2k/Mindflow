@@ -13,16 +13,17 @@ use crate::human::{
 };
 use crate::Project;
 
-pub const PROTOCOL_VERSION: u32 = 6;
+pub const PROTOCOL_VERSION: u32 = 7;
 pub const MAX_FRAME_BYTES: usize = 48 * 1024 * 1024;
 pub const STDERR_LIMIT_BYTES: usize = 64 * 1024;
-pub const REQUIRED_CAPABILITIES: [&str; 6] = [
+pub const REQUIRED_CAPABILITIES: [&str; 7] = [
     "folder-picker-v1",
     "project-files-v1",
     "qc-v2",
     "reader-v3",
-    "region-v4",
+    "region-v5",
     "snapshot-v2",
+    "timeline-v1",
 ];
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,6 +53,7 @@ pub enum BridgeCall {
     OpenProject(OpenProjectParams),
     RefreshProject(RootParams),
     ListDirectory(ProjectPathParams),
+    TimelineHistory(TimelineHistoryParams),
     DocumentationQc(DocumentationQcParams),
     DocumentationQcHistory(DocumentationQcHistoryParams),
     ReaderSnapshot(ReaderSnapshotParams),
@@ -67,6 +69,7 @@ impl BridgeCall {
             Self::OpenProject(_) => "open-project",
             Self::RefreshProject(_) => "refresh-project",
             Self::ListDirectory(_) => "list-directory",
+            Self::TimelineHistory(_) => "timeline-history",
             Self::DocumentationQc(_) => "documentation-qc",
             Self::DocumentationQcHistory(_) => "documentation-qc-history",
             Self::ReaderSnapshot(_) => "reader-snapshot",
@@ -109,6 +112,13 @@ pub struct ReaderSnapshotParams {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimelineHistoryParams {
+    pub root: String,
+    pub snapshot: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -179,6 +189,7 @@ pub enum BridgeResult {
     OpenProject(OpenProjectResponse),
     RefreshProject(OpenProjectResponse),
     Directory(ProjectDirectoryResponse),
+    TimelineHistory(human::TimelineHistoryResponse),
     DocumentationQc(crate::documentation_qc::DocumentationQc),
     DocumentationQcHistory(crate::documentation_qc::DocumentationQcHistory),
     Reader(ReaderProjectSnapshot),
@@ -454,6 +465,16 @@ fn handle_request(
                 ),
             }
         }
+        BridgeCall::TimelineHistory(params) => {
+            match projects.get(&params.root).filter(|project| project.snapshot_identity().id == params.snapshot) {
+                Some(project) => match human::timeline_history(project) {
+                    Ok(report) => BridgeResponse::success(request.id, BridgeResult::TimelineHistory(report)),
+                    Err(message) => BridgeResponse::failure(request.id, BridgeErrorCode::ProjectAccess, phase, message),
+                },
+                None => BridgeResponse::failure(request.id, BridgeErrorCode::StaleSnapshot, phase,
+                    "Timeline history requires the exact retained Region snapshot; refresh the project first"),
+            }
+        }
         BridgeCall::DocumentationQc(params) => {
             match projects.get(&params.root).filter(|project| project.snapshot_identity().id == params.snapshot) {
                 Some(project) => match crate::documentation_qc::observe_window(project, params.window) {
@@ -691,6 +712,31 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn timeline_history_requires_the_retained_snapshot() {
+        let fixture = TemporaryProject::new();
+        let project = Project::load(fixture.0.clone()).unwrap();
+        let root = project.root.display().to_string();
+        let snapshot = project.snapshot_identity().id.clone();
+        let region = human::region_response(&project).unwrap();
+        assert!(region.timeline_commits.is_empty());
+        assert!(!region.timeline_history_loaded);
+        let mut projects = BTreeMap::from([(root.clone(), project)]);
+        let mut handshaken = true;
+        let mut last_id = 0;
+        let request = |id, snapshot| BridgeRequest::new(id, BridgeCall::TimelineHistory(TimelineHistoryParams {
+            root: root.clone(), snapshot,
+        }));
+        let (response, _) = handle_request(request(1, "stale".into()), &mut handshaken, &mut last_id, &mut projects);
+        assert!(matches!(response.outcome, BridgeOutcome::Error { error: BridgeError { code: BridgeErrorCode::StaleSnapshot, .. } }));
+        let (response, terminate) = handle_request(request(2, snapshot.clone()), &mut handshaken, &mut last_id, &mut projects);
+        assert!(!terminate);
+        let BridgeOutcome::Ok { result: BridgeResult::TimelineHistory(report) } = response.outcome else { panic!("Timeline history failed") };
+        assert_eq!(report.root, root);
+        assert_eq!(report.snapshot.id, snapshot);
+        assert!(report.commits.is_empty()); // The fixture has no Git commits yet.
     }
 
     #[test]
@@ -1023,7 +1069,7 @@ mod tests {
                 required_capabilities: vec!["region-v2".to_owned()],
             }),
         );
-        request.protocol = 4;
+        request.protocol = PROTOCOL_VERSION - 1;
         let mut input = Vec::new();
         write_frame(&mut input, &request).unwrap();
         let mut output = Vec::new();

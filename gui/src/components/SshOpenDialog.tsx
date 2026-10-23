@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import {
   browseSshDirectory,
+  closeSshPicker,
   listSshDestinations,
 } from "../api";
 import {
@@ -67,6 +68,7 @@ export function SshOpenDialog({
       });
     return () => {
       active = false;
+      void closeSshPicker().catch(() => undefined);
     };
   }, []);
 
@@ -140,6 +142,7 @@ export function SshOpenDialog({
       setLocalError(undefined);
       onClearError();
       try {
+        await closeSshPicker();
         const nextDirectory = await browseSshDirectory(
           nextDestination,
           "~",
@@ -183,6 +186,7 @@ export function SshOpenDialog({
 
   const returnToServers = useCallback(() => {
     if (busy) return;
+    void closeSshPicker().catch((reason: unknown) => setLocalError(String(reason)));
     setStage("server");
     setLocalError(undefined);
     onClearError();

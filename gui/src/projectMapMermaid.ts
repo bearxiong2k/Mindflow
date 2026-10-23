@@ -4,6 +4,7 @@ import type {
   ProjectMapProjectionLayer,
 } from "./projectMapNavigation";
 import { normalizeCanvasTextScale } from "./canvasTextScale.ts";
+import { wrapLabelText } from "./textLayout.ts";
 import {
   decideProjectMapLayout,
   type ProjectMapLayoutDecision,
@@ -55,6 +56,7 @@ const MERMAID_INITIALIZATION = `%%{init: {
     "nodeSpacing": 38,
     "rankSpacing": 96,
     "padding": 20,
+    "wrappingWidth": 1000000,
     "useMaxWidth": false
   },
   "themeVariables": {
@@ -71,7 +73,8 @@ const MERMAID_INITIALIZATION = `%%{init: {
 const MERMAID_OVERVIEW_INITIALIZATION = `%%{init: {
   "flowchart": {
     "curve": "basis",
-    "padding": 20
+    "padding": 20,
+    "wrappingWidth": 1000000
   }
 }}%%`;
 
@@ -93,127 +96,12 @@ function escapeMermaidText(value: string) {
     .trim();
 }
 
-function wrapText(value: string, width: number, maximumLines: number) {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
-  const lines: string[] = [];
-  let current = "";
-  let truncated = false;
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= width || current.length === 0) {
-      current = candidate;
-      continue;
-    }
-    if (lines.length >= maximumLines - 1) {
-      truncated = true;
-      break;
-    }
-    lines.push(current);
-    current = word;
-  }
-  if (current && lines.length < maximumLines) lines.push(current);
-  if (truncated && lines.length > 0) {
-    lines[lines.length - 1] = `${lines[lines.length - 1].replace(/[.…]+$/, "")}…`;
-  }
-  return lines;
-}
-
-const RELATIONSHIP_LABEL_FOLD_GATE = 13.6;
-const RELATIONSHIP_LABEL_SPACE_WIDTH = 0.32;
-
-function relationshipLabelCharacterWidth(character: string) {
-  if (character === " ") return RELATIONSHIP_LABEL_SPACE_WIDTH;
-  if (/[^\x00-\x7f]/u.test(character)) return 1;
-  if (/[ilI1|!.,:;'`]/u.test(character)) return 0.3;
-  if (/[mwMW@#%&]/u.test(character)) return 0.9;
-  if (/[A-Z]/u.test(character)) return 0.68;
-  return 0.56;
-}
-
-function relationshipLabelTextWidth(value: string) {
-  let width = 0;
-  for (const character of value) {
-    width += relationshipLabelCharacterWidth(character);
-  }
-  return width;
-}
-
-interface BalancedRelationshipLabel {
-  lines: string[];
-  cost: number;
-  maximumWidth: number;
-}
-
-function balancedRelationshipLabelLines(value: string, textScale: number) {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
-  const normalized = words.join(" ");
-  const totalWidth = relationshipLabelTextWidth(normalized);
-  const foldGate =
-    RELATIONSHIP_LABEL_FOLD_GATE / normalizeCanvasTextScale(textScale);
-  if (totalWidth <= foldGate || words.length === 1) {
-    return [normalized];
-  }
-
-  // Mermaid otherwise greedily fills its fixed edge-label gate, which can
-  // strand a short final word. The gate decides when to fold; after that, use
-  // the mean line width to choose balanced authored breaks for Mermaid to lay
-  // out directly.
-  const lineCount = Math.min(
-    words.length,
-    Math.max(2, Math.ceil(totalWidth / foldGate)),
-  );
-  const targetWidth =
-    (totalWidth - RELATIONSHIP_LABEL_SPACE_WIDTH * (lineCount - 1)) /
-    lineCount;
-  const candidates = new Map<string, BalancedRelationshipLabel>();
-  const chooseLines = (
-    wordIndex: number,
-    remainingLines: number,
-  ): BalancedRelationshipLabel | undefined => {
-    const cacheKey = `${wordIndex}:${remainingLines}`;
-    const cached = candidates.get(cacheKey);
-    if (cached) return cached;
-    if (remainingLines === 1) {
-      const line = words.slice(wordIndex).join(" ");
-      const width = relationshipLabelTextWidth(line);
-      const candidate = {
-        lines: [line],
-        cost: (width - targetWidth) ** 2,
-        maximumWidth: width,
-      };
-      candidates.set(cacheKey, candidate);
-      return candidate;
-    }
-
-    let best: BalancedRelationshipLabel | undefined;
-    const lastEnd = words.length - remainingLines + 1;
-    for (let end = wordIndex + 1; end <= lastEnd; end += 1) {
-      const line = words.slice(wordIndex, end).join(" ");
-      const width = relationshipLabelTextWidth(line);
-      const tail = chooseLines(end, remainingLines - 1);
-      if (!tail) continue;
-      const candidate = {
-        lines: [line, ...tail.lines],
-        cost: (width - targetWidth) ** 2 + tail.cost,
-        maximumWidth: Math.max(width, tail.maximumWidth),
-      };
-      if (
-        !best ||
-        candidate.cost < best.cost ||
-        (candidate.cost === best.cost &&
-          candidate.maximumWidth < best.maximumWidth)
-      ) {
-        best = candidate;
-      }
-    }
-    if (best) candidates.set(cacheKey, best);
-    return best;
-  };
-
-  return chooseLines(0, lineCount)?.lines ?? [normalized];
-}
+// Structure supplies explicit natural breaks before Mermaid measures geometry.
+// Its default 200px greedy pass otherwise splits filenames inside words. Node
+// wrapping is disabled in our generated diagram; edge labels still have that
+// Mermaid gate, so their estimate leaves room for differences between fonts.
+const NODE_LABEL_WIDTH = 13.6;
+const RELATIONSHIP_LABEL_WIDTH = 12;
 
 export function projectMapRoleLabel(component: ProjectComponent, folder?: string) {
   if (!component.managed) return "Unmanaged folder context";
@@ -221,25 +109,34 @@ export function projectMapRoleLabel(component: ProjectComponent, folder?: string
   return undefined;
 }
 
-function componentTitleLabel(component: ProjectComponent) {
-  return wrapText(component.label, 27, 2)
+function componentTitleLabel(component: ProjectComponent, textScale: number) {
+  return wrapLabelText(
+    component.label,
+    NODE_LABEL_WIDTH / normalizeCanvasTextScale(textScale),
+  )
     .map(escapeMermaidText)
     .join("<br/>");
 }
 
 export const PROJECT_MAP_METRIC_TREND_SPACE = "Volume · growth";
 export const PROJECT_MAP_METRIC_SIZE_SPACE = "Documentation";
-export const PROJECT_MAP_METRIC_GAP_SPACE = "Spacing";
 
-function componentLabel(component: ProjectComponent, metrics?: ProjectMapMetrics) {
-  const titleLabel = componentTitleLabel(component);
+function componentLabel(
+  component: ProjectComponent,
+  textScale: number,
+  metrics?: ProjectMapMetrics,
+) {
+  const titleLabel = componentTitleLabel(component, textScale);
   const metric = metrics?.byComponentId.get(component.id);
-  const measurementLines = metric ? [metric.lineCountLabel, PROJECT_MAP_METRIC_GAP_SPACE, PROJECT_MAP_METRIC_TREND_SPACE, PROJECT_MAP_METRIC_SIZE_SPACE] : [];
+  const measurementLines = metric ? [metric.lineCountLabel, PROJECT_MAP_METRIC_TREND_SPACE, PROJECT_MAP_METRIC_SIZE_SPACE] : [];
   return [titleLabel, ...measurementLines.map(escapeMermaidText)].join("<br/>");
 }
 
 function relationshipLabel(type: string, textScale: number) {
-  return balancedRelationshipLabelLines(type, textScale)
+  return wrapLabelText(
+    type,
+    RELATIONSHIP_LABEL_WIDTH / normalizeCanvasTextScale(textScale),
+  )
     .map(escapeMermaidText)
     .join("<br/>");
 }
@@ -358,7 +255,7 @@ function buildRootOverviewMermaidGraph(
     if (!component || !key) return undefined;
     if (declared.has(id)) return key;
     declared.add(id);
-    return mermaidComponentNode(key,component,componentLabel(component, metrics));
+    return mermaidComponentNode(key,component,componentLabel(component, textScale, metrics));
   };
   const lines = [
     projectMapMermaidInitialization(true),
@@ -485,7 +382,7 @@ function buildExpandedProjectMapMermaidGraph(
         `${nodeIndentation}${mermaidComponentNode(
           key,
           component,
-          componentLabel(component, metrics),
+          componentLabel(component, textScale, metrics),
         )}`,
       );
     };
@@ -506,7 +403,7 @@ function buildExpandedProjectMapMermaidGraph(
         layerVisibleDepthByKey.set(key, expandedVisibleDepth);
         layerStyles.set(key, { opening: openingIds.has(component.id) });
         lines.push(
-          `${componentIndentation}subgraph ${key}["${componentLabel(component, metrics)}"]`,
+          `${componentIndentation}subgraph ${key}["${componentLabel(component, textScale, metrics)}"]`,
           `${componentIndentation}  direction ${nestedProjectMapLayoutDirection(
             layoutDirection,
           )}`,
@@ -634,7 +531,7 @@ export function buildProjectMapMermaidGraph(
   const connections: ProjectMapMermaidConnection[] = [];
   for (const [key, component] of nodeByKey) {
     lines.push(
-      `  ${mermaidComponentNode(key, component, componentLabel(component, metrics))}`,
+      `  ${mermaidComponentNode(key, component, componentLabel(component, textScale, metrics))}`,
     );
   }
 

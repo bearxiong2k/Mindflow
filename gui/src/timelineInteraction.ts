@@ -331,3 +331,33 @@ export function timelineIntentOpensReader(
 ): boolean {
   return surface === "file-entry" && managed;
 }
+
+/** Adjacent Git ticks share a display marker when their hit regions overlap.
+ * Ranges partition the complete history; Events and Anchor positions are untouched.
+ */
+export function timelineCommitTickGroups(
+  positions: readonly TimelineCommitTickPosition[],
+  maximumGroups = 512,
+  minimumSpacing = 8,
+): Array<{ first: number; last: number; x: number }> {
+  if (!positions.length) return [];
+  const budget = Math.max(1, Math.floor(maximumGroups));
+  const step = Math.max(minimumSpacing, (positions.at(-1)!.x - positions[0].x) / budget);
+  const groups: Array<{ first: number; last: number; x: number }> = [];
+  for (let index = 0; index < positions.length; index += 1) {
+    const previous = groups.at(-1);
+    if (previous && (positions[index].x - previous.x < step || groups.length >= budget)) {
+      previous.last = index;
+    } else {
+      groups.push({ first: index, last: index, x: positions[index].x });
+    }
+  }
+  return groups;
+}
+
+export function timelineCommitPage(total: number, selectedIndex: number, pageSize = 32) {
+  const size = Math.max(1, Math.floor(pageSize));
+  const index = Math.min(Math.max(0, selectedIndex), Math.max(0, total - 1));
+  const start = Math.floor(index / size) * size;
+  return { start, end: Math.min(total, start + size) };
+}

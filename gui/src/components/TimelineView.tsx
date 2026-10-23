@@ -56,6 +56,8 @@ import {
   resizeTimelinePanels,
   timelineAnchorPosition,
   timelineCommitTickPositions,
+  timelineCommitTickGroups,
+  timelineCommitPage,
   timelineFocusedEventBoundaryAtCanvasOrigin,
   timelineLeadingScrollInset,
   timelineScrollLeftForLeadingInset,
@@ -94,6 +96,9 @@ interface TimelineViewProps {
   graph: GraphData;
   anchorTimeline: AnchorTimelineSlice[];
   commits: TimelineCommit[];
+  historyLoading?: boolean;
+  historyError?: string;
+  onRetryHistory?: () => void;
   panelLayout: TimelinePanelLayout;
   foldRanges: TimelineFoldRange[];
   foldSelection: {
@@ -1333,55 +1338,37 @@ const TimelineAnchorTieGlyph = memo(function TimelineAnchorTieGlyph({
 });
 
 const TimelineCommitStrip = memo(function TimelineCommitStrip({
-  commits,
-  positions,
-  selectedHash,
-  onSelect,
+  commits, positions, selectedHash, onSelect,
 }: {
   commits: TimelineCommit[];
   positions: TimelineCommitTickPosition[];
   selectedHash?: string;
   onSelect: (commit: string) => void;
 }) {
+  const groups = useMemo(() => timelineCommitTickGroups(positions), [positions]);
+  const selectedIndex = useMemo(() => commits.findIndex((entry) => entry.commit === selectedHash), [commits, selectedHash]);
   return (
-    <g
-      className="timeline-commit-strip"
-      role="group"
-      aria-label={`${commits.length} Git commits in the current first-parent history`}
-    >
-      {commits.map((entry, index) => {
-        const position = positions[index];
-        if (!position) return null;
-        const selected = entry.commit === selectedHash;
-        const shortCommit = entry.commit.slice(0, 8);
+    <g className="timeline-commit-strip" role="group"
+      aria-label={`${commits.length} Git commits in ${groups.length} display markers; all commits available in the inspector`}>
+      {groups.map(({ first, last, x }) => {
+        const selected = selectedIndex >= first && selectedIndex <= last;
+        const index = selected ? selectedIndex : first;
+        const entry = commits[index];
+        if (!entry) return null;
         const select = () => onSelect(entry.commit);
+        const label = first === last
+          ? `Git commit ${first + 1} of ${commits.length}: ${entry.commit}`
+          : `Git commits ${first + 1}–${last + 1} of ${commits.length}; browse ${last - first + 1} commits`;
         return (
-          <g
-            className={`timeline-commit-tick${selected ? " is-selected" : ""}`}
-            key={entry.commit}
-            role="button"
-            tabIndex={0}
-            aria-pressed={selected}
-            aria-label={`Git commit ${index + 1} of ${commits.length}: ${entry.commit}`}
-            transform={`translate(${position.x} 0)`}
-            onClick={select}
-            onKeyDown={(event) => handleTimelineKey(event, select)}
-          >
-            <title>{shortCommit}</title>
-            <rect
-              className="timeline-commit-tick__hit"
-              x="-4"
-              y="1"
-              width="8"
-              height="16"
-            />
-            <line
-              className="timeline-commit-tick__mark"
-              x1="0"
-              x2="0"
-              y1={selected ? 2 : 5}
-              y2={selected ? 16 : 12}
-            />
+          <g className={`timeline-commit-tick${selected ? " is-selected" : ""}`}
+            key={first} role="button" tabIndex={0} aria-pressed={selected} aria-label={label}
+            data-commit-count={last - first + 1}
+            transform={`translate(${selected ? positions[index].x : x} 0)`}
+            onClick={select} onKeyDown={(event) => handleTimelineKey(event, select)}>
+            <title>{label}</title>
+            <rect className="timeline-commit-tick__hit" x="-4" y="1" width="8" height="16" />
+            <line className="timeline-commit-tick__mark" x1="0" x2="0"
+              y1={selected ? 2 : 5} y2={selected ? 16 : 12} />
           </g>
         );
       })}
@@ -1422,6 +1409,9 @@ const TimelineGuides = memo(function TimelineGuides({
 });
 
 export function TimelineView({
+  historyLoading,
+  historyError,
+  onRetryHistory,
   graph,
   anchorTimeline,
   commits,
@@ -2543,7 +2533,7 @@ export function TimelineView({
       onSelect={onSelect}
     />
   ) : selectedCommit ? (
-    <TimelineCommitInspector commit={selectedCommit.commit} />
+    <TimelineCommitInspector commit={selectedCommit.commit} commits={commits} onSelect={selectCommit} />
   ) : null;
   const hasInspector = inspector !== null;
   const panelResizeControl = useMemo<TimelinePanelResizeControlProps>(
@@ -2613,7 +2603,11 @@ export function TimelineView({
             <strong className="timeline-summary__title">Timeline</strong>
             <div className="timeline-summary__scope">
               <span><strong>{graph.events.length}</strong> events</span>
-              <span><strong>{commits.length}</strong> {commits.length === 1 ? "commit" : "commits"}</span>
+              {historyLoading ? <span role="status">Loading Git history…</span>
+                : historyError ? <span role="alert">Git history unavailable: {historyError} <button type="button" onClick={onRetryHistory}>Retry</button></span>
+                : <span><strong>{commits.length}</strong> {commits.length === 1 ? "commit" : "commits"}
+                  {commits.length > 0 ? <button type="button" onClick={() => selectCommit(selectedCommit?.commit ?? commits[commits.length - 1].commit)}>Browse commits</button> : null}
+                </span>}
               <span><strong>{anchorEntries.length}</strong> {anchorEntries.length === 1 ? "anchor" : "anchors"}</span>
               {visibleFoldCount > 0 ? <>
                 <span><strong>{visibleFoldCount}</strong> {visibleFoldCount === 1 ? "fold" : "folds"}</span>
@@ -3148,7 +3142,11 @@ function TimelineAnchorInspector({
   );
 }
 
-function TimelineCommitInspector({ commit }: { commit: string }) {
+function TimelineCommitInspector({ commit, commits, onSelect }: {
+  commit: string; commits: TimelineCommit[]; onSelect: (commit: string) => void;
+}) {
+  const selectedIndex = commits.findIndex((entry) => entry.commit === commit);
+  const page = timelineCommitPage(commits.length, selectedIndex);
   const [copyStatus, setCopyStatus] = useState<
     "idle" | "copied" | "failed"
   >("idle");
@@ -3174,6 +3172,23 @@ function TimelineCommitInspector({ commit }: { commit: string }) {
           <strong>{shortCommit}</strong>
         </div>
       </header>
+      <nav aria-label="Browse exact Git commits" className="timeline-commit-browser">
+        <div className="timeline-commit-browser__controls">
+          <button type="button" disabled={page.start === 0} onClick={() => onSelect(commits[Math.max(0, page.start - 32)].commit)}>Earlier commits</button>
+          <span>Commits {page.start + 1}–{page.end} of {commits.length}</span>
+          <button type="button" disabled={page.end === commits.length} onClick={() => onSelect(commits[page.end].commit)}>Later commits</button>
+        </div>
+        <label>Commit number <input type="number" min={1} max={commits.length} value={selectedIndex + 1}
+          onChange={(event) => {
+            const index = Number(event.target.value) - 1;
+            if (Number.isInteger(index) && index >= 0 && index < commits.length) onSelect(commits[index].commit);
+          }} /></label>
+        <div className="timeline-commit-browser__entries">
+          {commits.slice(page.start, page.end).map((entry, index) => <button type="button" key={entry.commit}
+            aria-pressed={entry.commit === commit} title={entry.commit}
+            onClick={() => onSelect(entry.commit)}>{page.start + index + 1}: {entry.commit.slice(0, 8)}</button>)}
+        </div>
+      </nav>
       <div className="timeline-commit-inspector__identity">
         <div>
           <span>Full commit ID</span>

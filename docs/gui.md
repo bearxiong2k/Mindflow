@@ -39,6 +39,10 @@ manifest effects.
 **Reader** opens document content in a separate native window. Follow ordinary
 Markdown links to continue reading. Images, Mermaid, and mathematical notation
 are rendered where supported; their presentation does not replace source files.
+Each Reader uses its owning workspace's observation. Refreshing or closing a
+different workspace on the same project does not replace that observation.
+Names and prose wrap at natural boundaries; code blocks preserve their lines
+and scroll when needed.
 
 **Region** inspects the validated account, including its counts, relationships,
 Opening, Events, and Anchors. It is another view of the project rather than a
@@ -46,6 +50,10 @@ separate store.
 
 **Timeline** becomes available from Structure when Events or Anchors exist.
 It shows the authored Evolve account and returns to the same structural context.
+Git history loads when Timeline opens, with visible loading and retry states.
+Dense Git marks are grouped for display. **Browse commits** provides pages and
+a commit-number field for selecting every exact commit. Events and Anchors
+remain available while history loads.
 A Region with empty Opening, Events, and Anchors is valid; a first project does
 not need invented history just to populate this view.
 
@@ -54,6 +62,8 @@ not need invented history just to populate this view.
 Optional Structure measurements and the QC view show registered-document volume
 and Git changes. They do not grade quality, infer progress, or decide when a
 document should split. Unknown historical comparison remains unknown.
+The **Volume** control groups each entry's line count with its compact growth
+chart. Hover or keyboard focus reveals the exact values and comparison baseline.
 
 Refresh reloads project content. If a newly synchronized local build is ready,
 explicit Refresh can activate it and reconstruct workspace tabs. Passive
@@ -71,12 +81,11 @@ this beta does not advertise supported SSH deployment.
 The CLI is the primary installation and first-use path. The optional GUI still
 has areas that need broader testing:
 
-- Refresh loads full Timeline history eagerly. Very large Git histories can
-  increase refresh time and memory use.
+- Opening Timeline still processes the complete first-parent Git history.
+  Very large histories can increase that request's time and memory use.
+- First-time layout of dense graphs can still be slow. Repeated navigation
+  reuses bounded caches and superseded queued layouts are cancelled.
 - Dense diagrams can exceed rendering limits, including the 500-edge budget.
   A visible rendering error can be recovered from by returning to a smaller
   folder scope or reducing displayed depth.
-- Shared-root isolation across multiple workspace windows is not yet qualified.
-  Use one workspace per project root for this beta. If another window refresh
-  invalidates retained content, refresh the affected window or reopen Reader.
 - Supported two-host SSH deployment has not completed its release qualification.

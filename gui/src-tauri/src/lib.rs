@@ -90,32 +90,92 @@ struct AppBuildState {
 
 #[derive(Debug, Default)]
 struct LocalProjectStore {
-    projects: Mutex<BTreeMap<String, Arc<Project>>>,
+    projects: Mutex<BTreeMap<(String, String), Arc<Project>>>,
+    pending: Mutex<BTreeMap<(String, String), Arc<()>>>,
 }
 
 impl LocalProjectStore {
-    fn projects(&self) -> Result<MutexGuard<'_, BTreeMap<String, Arc<Project>>>, String> {
+    fn projects(&self) -> Result<MutexGuard<'_, BTreeMap<(String, String), Arc<Project>>>, String> {
         self.projects
             .lock()
             .map_err(|_| "local Mindflow project store is unavailable".to_owned())
     }
 
-    fn retain(&self, project: Project) -> Result<RegionResponse, String> {
-        let project = Arc::new(project);
-        let region = human::region_response(project.as_ref())?;
-        self.projects()?
-            .insert(region.root.clone(), Arc::clone(&project));
+    #[cfg(test)]
+    fn retain(&self, owner: &str, project: Project) -> Result<RegionResponse, String> {
+        let root = project.root.clone();
+        self.load_region_with(owner, &root, || Ok(project))
+    }
+
+    fn load_region(&self, owner: &str, root: impl AsRef<Path>) -> Result<RegionResponse, String> {
+        let root = root.as_ref();
+        self.load_region_with(owner, root, || {
+            Project::load(root.to_path_buf()).map_err(|error| format!("{error:#}"))
+        })
+    }
+
+    fn load_region_with(
+        &self,
+        owner: &str,
+        root: &Path,
+        load: impl FnOnce() -> Result<Project, String>,
+    ) -> Result<RegionResponse, String> {
+        let key = (owner.to_owned(), root.display().to_string());
+        let ticket = Arc::new(());
+        self.pending
+            .lock()
+            .map_err(|_| "local project load registry is unavailable")?
+            .insert(key.clone(), Arc::clone(&ticket));
+        let result = load().and_then(|project| {
+            human::region_response(&project).map(|region| (Arc::new(project), region))
+        });
+        // A close or newer load removes/replaces this ticket. Holding the pending
+        // lock through insertion makes cleanup atomic with publishing a result.
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "local project load registry is unavailable")?;
+        if !pending
+            .get(&key)
+            .is_some_and(|current| Arc::ptr_eq(current, &ticket))
+        {
+            return Err("Mindflow project was closed or replaced while loading".to_owned());
+        }
+        pending.remove(&key);
+        let (project, region) = result?;
+        self.projects()?.insert(key, project);
         Ok(region)
     }
 
-    fn load_region(&self, root: impl AsRef<Path>) -> Result<RegionResponse, String> {
-        let project =
-            Project::load(root.as_ref().to_path_buf()).map_err(|error| format!("{error:#}"))?;
-        self.retain(project)
+    fn opened_region(&self, owner: &str, root: &Path) -> Result<Option<RegionResponse>, String> {
+        let project = self
+            .projects()?
+            .get(&(owner.to_owned(), root.display().to_string()))
+            .cloned();
+        project
+            .map(|project| human::region_response(&project))
+            .transpose()
     }
 
-    fn release_region(&self, root: &Path) -> Result<(), String> {
-        self.projects()?.remove(&root.display().to_string());
+    fn release_region(&self, owner: &str, root: &Path) -> Result<(), String> {
+        let key = (owner.to_owned(), root.display().to_string());
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "local project load registry is unavailable")?;
+        pending.remove(&key);
+        self.projects()?.remove(&key);
+        Ok(())
+    }
+
+    fn release_workspace(&self, owner: &str) -> Result<(), String> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "local project load registry is unavailable")?;
+        pending.retain(|(workspace, _), _| workspace != owner);
+        self.projects()?
+            .retain(|(workspace, _), _| workspace != owner);
         Ok(())
     }
 
@@ -125,14 +185,19 @@ impl LocalProjectStore {
 
     fn retained_project(
         &self,
+        owner: &str,
         root: &str,
         expected_snapshot: &str,
     ) -> Result<Arc<Project>, String> {
-        let project = self.projects()?.get(root).cloned().ok_or_else(|| {
-            format!(
-                "Mindflow project '{root}' is not retained by this desktop session; refresh it first"
+        let project = self
+            .projects()?
+            .get(&(owner.to_owned(), root.to_owned()))
+            .cloned()
+            .ok_or_else(|| {
+                format!(
+                "Mindflow project '{root}' is not retained by workspace '{owner}'; refresh it first"
             )
-        })?;
+            })?;
         if project.snapshot_identity().id != expected_snapshot {
             return Err(format!(
                 "Mindflow Reader requested snapshot {expected_snapshot}, but the retained project snapshot is {}",
@@ -144,15 +209,19 @@ impl LocalProjectStore {
 
     fn validate_reader_root(
         &self,
+        owner: &str,
         root: &str,
         expected_snapshot: Option<&str>,
     ) -> Result<String, String> {
         let root = self.canonical_root(root)?;
         match expected_snapshot {
             Some(snapshot) => {
-                self.retained_project(&root, snapshot)?;
+                self.retained_project(owner, &root, snapshot)?;
             }
-            None if self.projects()?.contains_key(&root) => {
+            None if self
+                .projects()?
+                .contains_key(&(owner.to_owned(), root.clone())) =>
+            {
                 return Err(
                     "an opened Region Reader request must name its retained snapshot".to_owned(),
                 );
@@ -164,6 +233,7 @@ impl LocalProjectStore {
 
     fn reader_snapshot(
         &self,
+        owner: &str,
         root: &str,
         path: &str,
         expected_snapshot: Option<&str>,
@@ -171,10 +241,13 @@ impl LocalProjectStore {
         let root = self.canonical_root(root)?;
         match expected_snapshot {
             Some(snapshot) => {
-                let project = self.retained_project(&root, snapshot)?;
+                let project = self.retained_project(owner, &root, snapshot)?;
                 human::reader_snapshot_for_project(project.as_ref(), path, true)
             }
-            None if self.projects()?.contains_key(&root) => {
+            None if self
+                .projects()?
+                .contains_key(&(owner.to_owned(), root.clone())) =>
+            {
                 Err("an opened Region Reader request must name its retained snapshot".to_owned())
             }
             None => human::reader_snapshot(root, path),
@@ -345,6 +418,7 @@ fn reader_window_snapshot_for(
 }
 
 fn reader_project_snapshot_for_access(
+    owner: &str,
     ssh_sessions: &SshSessionManager,
     local_projects: &LocalProjectStore,
     root: &str,
@@ -352,8 +426,8 @@ fn reader_project_snapshot_for_access(
     expected_snapshot: Option<&str>,
 ) -> Result<mindflow::human::ReaderProjectSnapshot, String> {
     match parse_access_root(root)? {
-        Some(access) => ssh_sessions.reader_snapshot(&access, path, expected_snapshot),
-        None => local_projects.reader_snapshot(root, path, expected_snapshot),
+        Some(access) => ssh_sessions.reader_snapshot(owner, &access, path, expected_snapshot),
+        None => local_projects.reader_snapshot(owner, root, path, expected_snapshot),
     }
 }
 
@@ -363,6 +437,7 @@ fn reader_window_snapshot_for_access(
     session: ReaderWindowSession,
 ) -> Result<ReaderWindowSnapshot, String> {
     let snapshot = reader_project_snapshot_for_access(
+        &session.owner_window,
         ssh_sessions,
         local_projects,
         &session.root,
@@ -386,12 +461,13 @@ fn reader_window_snapshot_for_access(
 }
 
 fn reader_image_data_url_for_access(
+    owner: &str,
     ssh_sessions: &SshSessionManager,
     root: &str,
     path: &str,
 ) -> Result<String, String> {
     match parse_access_root(root)? {
-        Some(access) => ssh_sessions.image_data_url(&access, path),
+        Some(access) => ssh_sessions.image_data_url(owner, &access, path),
         None => reader_image_data_url_for(Path::new(root), path),
     }
 }
@@ -567,50 +643,69 @@ fn project_label(path: &Path) -> String {
 }
 
 fn open_starting_paths_retained(
+    owner: &str,
     starting_paths: Vec<StartingPath>,
     local_projects: &LocalProjectStore,
+    refresh: bool,
 ) -> Vec<OpenRegionResponse> {
     resolve_starting_paths(starting_paths)
         .into_iter()
-        .map(|resolved| match resolved {
-            ResolvedStartingPath::Root {
-                requested_path,
-                root,
-            } => match local_projects.load_region(&root) {
-                Ok(region) => OpenRegionResponse::Region { region },
-                Err(message) => OpenRegionResponse::Error {
+        .map(|resolved| {
+            if !refresh {
+                let root = match &resolved {
+                    ResolvedStartingPath::Root { root, .. }
+                    | ResolvedStartingPath::Folder { root } => Some(root),
+                    ResolvedStartingPath::Error { .. } => None,
+                };
+                if let Some(root) = root {
+                    if let Ok(Some(region)) = local_projects.opened_region(owner, root) {
+                        return OpenRegionResponse::Region { region };
+                    }
+                }
+            }
+            match resolved {
+                ResolvedStartingPath::Root {
+                    requested_path,
+                    root,
+                } => match local_projects.load_region(owner, &root) {
+                    Ok(region) => OpenRegionResponse::Region { region },
+                    Err(message) => OpenRegionResponse::Error {
+                        requested_path: requested_path.display().to_string(),
+                        root: Some(root.display().to_string()),
+                        project: project_label(&root),
+                        message,
+                    },
+                },
+                ResolvedStartingPath::Folder { root } => {
+                    match local_projects.release_region(owner, &root) {
+                        Ok(()) => OpenRegionResponse::Folder {
+                            project: project_label(&root),
+                            root: root.display().to_string(),
+                        },
+                        Err(message) => OpenRegionResponse::Error {
+                            requested_path: root.display().to_string(),
+                            root: Some(root.display().to_string()),
+                            project: project_label(&root),
+                            message,
+                        },
+                    }
+                }
+                ResolvedStartingPath::Error {
+                    requested_path,
+                    message,
+                } => OpenRegionResponse::Error {
+                    project: project_label(&requested_path),
                     requested_path: requested_path.display().to_string(),
-                    root: Some(root.display().to_string()),
-                    project: project_label(&root),
+                    root: None,
                     message,
                 },
-            },
-            ResolvedStartingPath::Folder { root } => match local_projects.release_region(&root) {
-                Ok(()) => OpenRegionResponse::Folder {
-                    project: project_label(&root),
-                    root: root.display().to_string(),
-                },
-                Err(message) => OpenRegionResponse::Error {
-                    requested_path: root.display().to_string(),
-                    root: Some(root.display().to_string()),
-                    project: project_label(&root),
-                    message,
-                },
-            },
-            ResolvedStartingPath::Error {
-                requested_path,
-                message,
-            } => OpenRegionResponse::Error {
-                project: project_label(&requested_path),
-                requested_path: requested_path.display().to_string(),
-                root: None,
-                message,
-            },
+            }
         })
         .collect()
 }
 
 fn open_starting_paths_with_access(
+    owner: &str,
     starting_paths: Vec<StartingPath>,
     ssh_sessions: &SshSessionManager,
     local_projects: &LocalProjectStore,
@@ -621,7 +716,7 @@ fn open_starting_paths_with_access(
         let requested = starting_path.path().display().to_string();
         let response = if requested.starts_with("ssh://") {
             match parse_access_root(&requested) {
-                Ok(Some(access)) => match ssh_sessions.refresh_project(&access, true) {
+                Ok(Some(access)) => match ssh_sessions.open_project(owner, &access.destination, &access.root) {
                     Ok(response) => Some(response),
                     Err(message) => Some(OpenRegionResponse::Error {
                         requested_path: requested.clone(),
@@ -639,7 +734,7 @@ fn open_starting_paths_with_access(
                 }),
             }
         } else {
-            open_starting_paths_retained(vec![starting_path], local_projects)
+            open_starting_paths_retained(owner, vec![starting_path], local_projects, false)
                 .into_iter()
                 .next()
         };
@@ -675,19 +770,22 @@ fn startup_regions(
 
 #[tauri::command]
 fn open_regions(
+    window: WebviewWindow,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     local_projects: tauri::State<'_, LocalProjectStore>,
     arguments: Vec<String>,
 ) -> Result<Vec<OpenRegionResponse>, String> {
-    open_region_arguments(arguments, &ssh_sessions, &local_projects)
+    open_region_arguments(window.label(), arguments, &ssh_sessions, &local_projects)
 }
 
 fn open_region_arguments(
+    owner: &str,
     arguments: Vec<String>,
     ssh_sessions: &SshSessionManager,
     local_projects: &LocalProjectStore,
 ) -> Result<Vec<OpenRegionResponse>, String> {
     open_batch(
+        owner,
         OpenBatch::Requested(arguments.into_iter().map(OsString::from).collect()),
         ssh_sessions,
         local_projects,
@@ -695,15 +793,16 @@ fn open_region_arguments(
 }
 
 fn open_batch(
+    owner: &str,
     batch: OpenBatch,
     ssh_sessions: &SshSessionManager,
     local_projects: &LocalProjectStore,
 ) -> Result<Vec<OpenRegionResponse>, String> {
     match batch {
         OpenBatch::Startup(arguments) => requested_starting_paths(arguments)
-            .map(|paths| open_starting_paths_with_access(paths, ssh_sessions, local_projects)),
+            .map(|paths| open_starting_paths_with_access(owner, paths, ssh_sessions, local_projects)),
         OpenBatch::Requested(arguments) => parse_starting_paths(None, arguments, None)
-            .map(|paths| open_starting_paths_with_access(paths, ssh_sessions, local_projects)),
+            .map(|paths| open_starting_paths_with_access(owner, paths, ssh_sessions, local_projects)),
     }
 }
 
@@ -716,7 +815,7 @@ fn open_batches(
     record_test_message(&format!("drained\t{window_label}\t{}", batches.len()));
     let responses = batches
         .into_iter()
-        .map(|batch| open_batch(batch, ssh_sessions, local_projects))
+        .map(|batch| open_batch(window_label, batch, ssh_sessions, local_projects))
         .collect::<Result<Vec<_>, _>>()?;
     let opened = responses
         .iter()
@@ -749,11 +848,12 @@ fn take_pending_open_regions(
 
 #[tauri::command]
 fn open_ssh_region(
+    window: WebviewWindow,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     destination: String,
     path: String,
 ) -> Result<OpenRegionResponse, String> {
-    ssh_sessions.open_project(&destination, &path)
+    ssh_sessions.open_project(window.label(), &destination, &path)
 }
 
 #[tauri::command]
@@ -762,13 +862,22 @@ fn list_ssh_destinations() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+fn close_ssh_picker(
+    window: WebviewWindow,
+    ssh_sessions: tauri::State<'_, SshSessionManager>,
+) -> Result<(), String> {
+    ssh_sessions.release_picker(window.label())
+}
+
+#[tauri::command]
 fn browse_ssh_directory(
+    window: WebviewWindow,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     destination: String,
     path: String,
     connect_if_missing: bool,
 ) -> Result<mindflow::human::FolderPickerResponse, String> {
-    ssh_sessions.browse_directory(&destination, &path, connect_if_missing)
+    ssh_sessions.browse_directory(window.label(), &destination, &path, connect_if_missing)
 }
 
 fn activate_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
@@ -986,8 +1095,8 @@ async fn present_reader_window(
         };
 
     let root = match parse_access_root(&root)? {
-        Some(access) => ssh_sessions.validate_reader_root(&access, snapshot.as_deref())?,
-        None => local_projects.validate_reader_root(&root, snapshot.as_deref())?,
+        Some(access) => ssh_sessions.validate_reader_root(&owner_window, &access, snapshot.as_deref())?,
+        None => local_projects.validate_reader_root(&owner_window, &root, snapshot.as_deref())?,
     };
     record_test_message(&format!(
         "reader\ttarget-validated\t{}\t{}ms",
@@ -1086,7 +1195,7 @@ fn reader_image_data_url(
     let session = controller
         .reader_session(window.label())?
         .ok_or_else(|| format!("Mindflow window '{}' is not a Reader", window.label()))?;
-    reader_image_data_url_for_access(&ssh_sessions, &session.root, &path)
+    reader_image_data_url_for_access(&session.owner_window, &ssh_sessions, &session.root, &path)
 }
 
 #[tauri::command]
@@ -1162,12 +1271,13 @@ fn reconcile_reader_windows(
         ));
     }
     let root = match parse_access_root(&root)? {
-        Some(access) => ssh_sessions.validate_reader_root(&access, snapshot.as_deref())?,
-        None => local_projects.validate_reader_root(&root, snapshot.as_deref())?,
+        Some(access) => ssh_sessions.validate_reader_root(window.label(), &access, snapshot.as_deref())?,
+        None => local_projects.validate_reader_root(window.label(), &root, snapshot.as_deref())?,
     };
     for (label, _) in controller.reader_sessions_for(window.label(), &root)? {
         let session = controller.update_reader_snapshot(&label, snapshot.clone())?;
         if reader_project_snapshot_for_access(
+            &session.owner_window,
             &ssh_sessions,
             &local_projects,
             &session.root,
@@ -1188,8 +1298,10 @@ fn reconcile_reader_windows(
 }
 
 #[tauri::command]
-fn close_reader_windows(
+fn close_project(
     app: tauri::AppHandle,
+    local_projects: tauri::State<'_, LocalProjectStore>,
+    ssh_sessions: tauri::State<'_, SshSessionManager>,
     window: WebviewWindow,
     controller: tauri::State<'_, DesktopController>,
     root: String,
@@ -1205,6 +1317,10 @@ fn close_reader_windows(
         if let Some(reader) = app.get_webview_window(&label) {
             let _ = reader.close();
         }
+    }
+    match parse_access_root(&root)? {
+        Some(access) => ssh_sessions.release_project(window.label(), &access)?,
+        None => local_projects.release_region(window.label(), Path::new(&root))?,
     }
     Ok(())
 }
@@ -1242,6 +1358,7 @@ fn update_window_session(
 
 #[tauri::command]
 async fn version_info(
+    window: WebviewWindow,
     app: tauri::AppHandle,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     root: Option<String>,
@@ -1250,7 +1367,7 @@ async fn version_info(
     let variant = versions::app_variant(&app.config().identifier);
     let (project_core, project) = match root.as_deref() {
         Some(root) => match parse_access_root(root) {
-            Ok(Some(access)) => ssh_sessions.versions(&access)
+            Ok(Some(access)) => ssh_sessions.versions(window.label(), &access)
                 .map(|(core, project)| (Some(core), project))
                 .unwrap_or_default(),
             Ok(None) => {
@@ -1281,6 +1398,7 @@ async fn version_info(
 
 #[tauri::command]
 fn refresh_project(
+    window: WebviewWindow,
     build_state: tauri::State<'_, AppBuildState>,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     local_projects: tauri::State<'_, LocalProjectStore>,
@@ -1297,6 +1415,7 @@ fn refresh_project(
     }
 
     reconstruct_project_path(
+        window.label(),
         root,
         &ssh_sessions,
         &local_projects,
@@ -1305,16 +1424,19 @@ fn refresh_project(
 }
 
 fn reconstruct_project_path(
+    owner: &str,
     root: String,
     ssh_sessions: &SshSessionManager,
     local_projects: &LocalProjectStore,
     connect_if_missing: bool,
 ) -> Result<RefreshProjectResponse, String> {
     let response = match parse_access_root(&root)? {
-        Some(access) => ssh_sessions.refresh_project(&access, connect_if_missing)?,
+        Some(access) => ssh_sessions.refresh_project(owner, &access, connect_if_missing)?,
         None => open_starting_paths_retained(
+            owner,
             vec![StartingPath::Explicit(PathBuf::from(&root))],
             local_projects,
+            true,
         )
         .into_iter()
         .next()
@@ -1371,6 +1493,7 @@ fn relaunch_regions(
 
 #[tauri::command]
 fn choose_region(
+    window: WebviewWindow,
     local_projects: tauri::State<'_, LocalProjectStore>,
 ) -> Result<Option<OpenRegionResponse>, String> {
     let Some(root) = rfd::FileDialog::new()
@@ -1380,7 +1503,7 @@ fn choose_region(
         return Ok(None);
     };
     Ok(
-        open_starting_paths_retained(vec![StartingPath::Explicit(root)], &local_projects)
+        open_starting_paths_retained(window.label(), vec![StartingPath::Explicit(root)], &local_projects, false)
             .into_iter()
             .next(),
     )
@@ -1388,6 +1511,7 @@ fn choose_region(
 
 #[tauri::command]
 fn initialize_region(
+    window: WebviewWindow,
     local_projects: tauri::State<'_, LocalProjectStore>,
     root: String,
 ) -> Result<RegionResponse, String> {
@@ -1396,24 +1520,49 @@ fn initialize_region(
             "Remote region initialization is not supported by the SSH bridge".to_owned(),
         );
     }
-    let project = Project::initialize(PathBuf::from(root)).map_err(|error| format!("{error:#}"))?;
-    local_projects.retain(project)
+    let root = canonical_desktop_folder(root)?;
+    local_projects.load_region_with(window.label(), &root, || {
+        Project::initialize(root.clone()).map_err(|error| format!("{error:#}"))
+    })
+}
+
+#[tauri::command]
+async fn timeline_history(
+    app: tauri::AppHandle,
+    webview: WebviewWindow,
+    root: String,
+    snapshot: String,
+) -> Result<human::TimelineHistoryResponse, String> {
+    let owner = webview.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        match parse_access_root(&root)? {
+            Some(access) => app.state::<SshSessionManager>().timeline_history(&owner, &access, &snapshot),
+            None => {
+                let store = app.state::<LocalProjectStore>();
+                let root = store.canonical_root(&root)?;
+                let project = store.retained_project(&owner, &root, &snapshot)?;
+                human::timeline_history(&project)
+            }
+        }
+    }).await.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
 async fn documentation_qc(
+    webview: WebviewWindow,
     app: tauri::AppHandle,
     root: String,
     snapshot: String,
     window: mindflow::documentation_qc::QcWindow,
 ) -> Result<mindflow::documentation_qc::DocumentationQc, String> {
+    let owner = webview.label().to_owned();
     tauri::async_runtime::spawn_blocking(move || {
         match parse_access_root(&root)? {
-            Some(access) => app.state::<SshSessionManager>().documentation_qc(&access, &snapshot, window),
+            Some(access) => app.state::<SshSessionManager>().documentation_qc(&owner, &access, &snapshot, window),
             None => {
                 let store = app.state::<LocalProjectStore>();
                 let root = store.canonical_root(&root)?;
-                let project = store.retained_project(&root, &snapshot)?;
+                let project = store.retained_project(&owner, &root, &snapshot)?;
                 mindflow::documentation_qc::observe_window(&project, window).map_err(|error| format!("{error:#}"))
             }
         }
@@ -1422,18 +1571,20 @@ async fn documentation_qc(
 
 #[tauri::command]
 async fn documentation_qc_history(
+    webview: WebviewWindow,
     app: tauri::AppHandle,
     root: String,
     snapshot: String,
     offset: usize,
 ) -> Result<mindflow::documentation_qc::DocumentationQcHistory, String> {
+    let owner = webview.label().to_owned();
     tauri::async_runtime::spawn_blocking(move || {
         match parse_access_root(&root)? {
-            Some(access) => app.state::<SshSessionManager>().documentation_qc_history(&access, &snapshot, offset),
+            Some(access) => app.state::<SshSessionManager>().documentation_qc_history(&owner, &access, &snapshot, offset),
             None => {
                 let store = app.state::<LocalProjectStore>();
                 let root = store.canonical_root(&root)?;
-                let project = store.retained_project(&root, &snapshot)?;
+                let project = store.retained_project(&owner, &root, &snapshot)?;
                 mindflow::documentation_qc::history_choices(&project, offset).map_err(|error| format!("{error:#}"))
             }
         }
@@ -1442,12 +1593,13 @@ async fn documentation_qc_history(
 
 #[tauri::command]
 fn list_project_directory(
+    window: WebviewWindow,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     root: String,
     path: String,
 ) -> Result<ProjectDirectoryResponse, String> {
     match parse_access_root(&root)? {
-        Some(access) => ssh_sessions.list_directory(&access, &path),
+        Some(access) => ssh_sessions.list_directory(window.label(), &access, &path),
         None => {
             let root = canonical_desktop_folder(root)?;
             project_directory_for(&root, &path)
@@ -1457,13 +1609,14 @@ fn list_project_directory(
 
 #[tauri::command]
 fn read_document(
+    window: WebviewWindow,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
     root: String,
     path: String,
 ) -> Result<DocumentResponse, String> {
     match parse_access_root(&root)? {
         Some(access) => Ok(ssh_sessions
-            .reader_snapshot_current(&access, &path)?
+            .reader_snapshot_current(window.label(), &access, &path)?
             .document),
         None => human::read_managed_document(root, &path),
     }
@@ -1578,6 +1731,8 @@ pub fn run() {
             tauri::WindowEvent::Destroyed => {
                 let app = window.app_handle();
                 let controller = app.state::<DesktopController>();
+                let _ = app.state::<LocalProjectStore>().release_workspace(window.label());
+                let _ = app.state::<SshSessionManager>().release_workspace(window.label());
                 let removed_reader = controller.reader_session(window.label()).ok().flatten();
                 let dependent_readers =
                     controller.remove_window(window.label()).unwrap_or_default();
@@ -1607,6 +1762,7 @@ pub fn run() {
             open_ssh_region,
             list_ssh_destinations,
             browse_ssh_directory,
+            close_ssh_picker,
             take_pending_open_regions,
             create_project_window,
             present_reader_window,
@@ -1615,7 +1771,7 @@ pub fn run() {
             inspect_reader_target,
             update_reader_window_scale,
             reconcile_reader_windows,
-            close_reader_windows,
+            close_project,
             update_window_session,
             version_info,
             refresh_project,
@@ -1623,6 +1779,7 @@ pub fn run() {
             choose_region,
             initialize_region,
             list_project_directory,
+            timeline_history,
             documentation_qc,
             documentation_qc_history,
             read_document
@@ -1832,12 +1989,15 @@ mod tests {
         assert_eq!(response.graph.events.len(), 1);
         assert_eq!(response.status.evolve_events, response.graph.events.len());
         assert_eq!(response.anchor_timeline.len(), response.graph.anchors.len());
-        assert_eq!(response.timeline_commits.len(), 1);
+        assert!(response.timeline_commits.is_empty());
+        assert!(!response.timeline_history_loaded);
+        let timeline = human::timeline_history(&Project::load(root.clone()).unwrap()).unwrap();
+        assert_eq!(timeline.commits.len(), 1);
         assert_eq!(
-            response.timeline_commits[0].commit,
+            timeline.commits[0].commit,
             fixture_git(&root, &["rev-parse", "HEAD"])
         );
-        assert_eq!(response.timeline_commits[0].event_boundary, Some(1));
+        assert_eq!(timeline.commits[0].event_boundary, Some(1));
         assert!(response
             .anchor_timeline
             .iter()
@@ -1867,17 +2027,18 @@ mod tests {
             ["review-point"]
         );
         assert_eq!(anchored.anchor_timeline.len(), 1);
+        let history = human::timeline_history(&Project::load(root.clone()).unwrap()).unwrap();
         assert_eq!(
-            anchored
-                .timeline_commits
+            history
+                .commits
                 .iter()
                 .map(|entry| entry.commit.as_str())
                 .collect::<Vec<_>>(),
             vec![anchor_commit.as_str(), anchored_slice.as_str()]
         );
         assert_eq!(
-            anchored
-                .timeline_commits
+            history
+                .commits
                 .iter()
                 .map(|entry| entry.event_boundary)
                 .collect::<Vec<_>>(),
@@ -1933,7 +2094,7 @@ mod tests {
         let root = fixture.canonicalize().unwrap();
         let local_projects = LocalProjectStore::default();
         let region = local_projects
-            .load_region(&root)
+            .load_region("main", &root)
             .unwrap_or_else(|error| panic!("{error}"));
         let retained_id = region.status.snapshot.id.clone();
         let original = fs::read_to_string(root.join("notes/current.md")).unwrap();
@@ -1944,7 +2105,7 @@ mod tests {
         )
         .unwrap();
         let retained = local_projects
-            .reader_snapshot(&region.root, "notes/current.md", Some(retained_id.as_str()))
+            .reader_snapshot("main", &region.root, "notes/current.md", Some(retained_id.as_str()))
             .unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(retained.document.content, original);
         assert_eq!(
@@ -1956,20 +2117,21 @@ mod tests {
         );
         assert!(retained.graph.is_some());
         assert!(local_projects
-            .reader_snapshot(&region.root, "notes/current.md", Some("sha256:stale"))
+            .reader_snapshot("main", &region.root, "notes/current.md", Some("sha256:stale"))
             .unwrap_err()
             .contains("retained project snapshot"));
         assert!(local_projects
-            .reader_snapshot(&region.root, "notes/current.md", None)
+            .reader_snapshot("main", &region.root, "notes/current.md", None)
             .unwrap_err()
             .contains("must name its retained snapshot"));
 
         let refreshed = local_projects
-            .load_region(&root)
+            .load_region("main", &root)
             .unwrap_or_else(|error| panic!("{error}"));
         assert_ne!(refreshed.status.snapshot.id, retained_id);
         let current = local_projects
             .reader_snapshot(
+                "main",
                 &refreshed.root,
                 "notes/current.md",
                 Some(refreshed.status.snapshot.id.as_str()),
@@ -1981,15 +2143,222 @@ mod tests {
     }
 
     #[test]
+    fn peer_workspace_refresh_preserves_reader_qc_and_history_snapshots() {
+        let fixture = representative_region("peer-window-snapshots");
+        let root = fixture.canonicalize().unwrap();
+        let local_projects = LocalProjectStore::default();
+        let ssh_sessions = SshSessionManager::default();
+        let first = local_projects.load_region("main", &root).unwrap();
+        let first_id = first.status.snapshot.id.clone();
+        let original = fs::read_to_string(root.join("notes/current.md")).unwrap();
+        let first_lease = Arc::downgrade(
+            &local_projects
+                .retained_project("main", &first.root, &first_id)
+                .unwrap(),
+        );
+        let reader = ReaderWindowSession {
+            owner_window: "main".to_owned(),
+            root: first.root.clone(),
+            snapshot: Some(first_id.clone()),
+            path: "notes/current.md".to_owned(),
+            fragment: None,
+            interface_scale: 1.0,
+        };
+        fs::write(
+            root.join("notes/current.md"),
+            "# A newer window observation\n",
+        )
+        .unwrap();
+        let second = local_projects.load_region("workspace-2", &root).unwrap();
+        assert_ne!(first_id, second.status.snapshot.id);
+        assert_eq!(local_projects.projects().unwrap().len(), 2);
+        let first_reader =
+            reader_window_snapshot_for_access(&ssh_sessions, &local_projects, reader.clone()).unwrap();
+        assert_eq!(first_reader.document.content, original);
+        assert_eq!(first_reader.snapshot.unwrap().id, first_id);
+        let second_reader = reader_window_snapshot_for_access(
+            &ssh_sessions,
+            &local_projects,
+            ReaderWindowSession {
+                owner_window: "workspace-2".to_owned(),
+                snapshot: Some(second.status.snapshot.id.clone()),
+                ..reader.clone()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            second_reader.document.content,
+            "# A newer window observation\n"
+        );
+        // Both measurement surfaces pin the same workspace lookup as Reader.
+        for (owner, region) in [("main", &first), ("workspace-2", &second)] {
+            let project = local_projects
+                .retained_project(owner, &region.root, &region.status.snapshot.id)
+                .unwrap();
+            let qc = mindflow::documentation_qc::observe_window(
+                &project,
+                mindflow::documentation_qc::QcWindow::Recent { commits: 5 },
+            )
+            .unwrap();
+            assert_eq!(qc.snapshot.id, region.status.snapshot.id);
+            assert_eq!(
+                human::timeline_history(&project).unwrap().snapshot.id,
+                region.status.snapshot.id
+            );
+        }
+        assert!(local_projects
+            .retained_project("main", &first.root, &second.status.snapshot.id)
+            .is_err());
+        assert!(local_projects
+            .retained_project("workspace-3", &first.root, &first_id)
+            .is_err());
+
+        let controller = DesktopController::with_main(OpenBatch::Requested(Vec::new()));
+        controller
+            .register_reader("reader-1".to_owned(), reader)
+            .unwrap();
+        controller.remove_window("reader-1").unwrap();
+        assert!(
+            first_lease.upgrade().is_some(),
+            "Reader close must preserve its workspace observation"
+        );
+        local_projects.release_region("workspace-2", &root).unwrap();
+        assert!(
+            first_lease.upgrade().is_some(),
+            "peer tab close must preserve this observation"
+        );
+        local_projects.release_workspace("main").unwrap();
+        assert!(
+            first_lease.upgrade().is_none(),
+            "workspace close releases its final snapshot owner"
+        );
+        assert!(local_projects.projects().unwrap().is_empty());
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
+    #[test]
+    fn same_workspace_refresh_and_folder_transition_release_only_its_previous_snapshot() {
+        let fixture = representative_region("snapshot-lifetime");
+        let root = fixture.canonicalize().unwrap();
+        let local_projects = LocalProjectStore::default();
+        let first = local_projects.load_region("main", &root).unwrap();
+        let previous = Arc::downgrade(
+            &local_projects
+                .retained_project("main", &first.root, &first.status.snapshot.id)
+                .unwrap(),
+        );
+        let peer = local_projects.load_region("workspace-2", &root).unwrap();
+        fs::write(root.join("notes/current.md"), "# New slice\n").unwrap();
+        let newer = local_projects.load_region("main", &root).unwrap();
+        assert_ne!(first.status.snapshot.id, newer.status.snapshot.id);
+        assert!(
+            previous.upgrade().is_none(),
+            "repeated refresh must not accumulate old slices"
+        );
+        assert_eq!(local_projects.projects().unwrap().len(), 2);
+        fs::remove_file(root.join(mindflow::project::MANIFEST_FILENAME)).unwrap();
+        assert!(matches!(
+            reconstruct_project_path(
+                "main",
+                first.root.clone(),
+                &SshSessionManager::default(),
+                &local_projects,
+                false
+            )
+            .unwrap(),
+            RefreshProjectResponse::Folder { .. }
+        ));
+        assert!(local_projects
+            .retained_project("main", &first.root, &newer.status.snapshot.id)
+            .is_err());
+        let reader = local_projects
+            .reader_snapshot(
+                "workspace-2",
+                &peer.root,
+                "notes/current.md",
+                Some(&peer.status.snapshot.id),
+            )
+            .unwrap();
+        assert_eq!(reader.snapshot.unwrap().id, peer.status.snapshot.id);
+        assert_eq!(local_projects.projects().unwrap().len(), 1);
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
+    #[test]
+    fn closing_a_project_or_workspace_during_load_does_not_restore_its_snapshot() {
+        let fixture = representative_region("closed-during-load");
+        let root = fixture.canonicalize().unwrap();
+        let store = LocalProjectStore::default();
+        let peer = store.load_region("workspace-2", &root).unwrap();
+        for close_workspace in [false, true] {
+            let result = store.load_region_with("main", &root, || {
+                if close_workspace {
+                    store.release_workspace("main").unwrap();
+                } else {
+                    store.release_region("main", &root).unwrap();
+                }
+                Project::load(root.clone()).map_err(|error| error.to_string())
+            });
+            assert!(result.unwrap_err().contains("closed or replaced"));
+            assert!(store.pending.lock().unwrap().is_empty());
+            assert_eq!(store.projects().unwrap().len(), 1);
+            store
+                .retained_project("workspace-2", &peer.root, &peer.status.snapshot.id)
+                .unwrap();
+        }
+        store.load_region("main", &root).unwrap();
+        assert_eq!(
+            store.projects().unwrap().len(),
+            2,
+            "a later explicit open can load again"
+        );
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
+    #[test]
+    fn duplicate_open_preserves_the_existing_workspace_snapshot_until_refresh() {
+        let fixture = representative_region("duplicate-window-open");
+        let root = fixture.canonicalize().unwrap();
+        let local_projects = LocalProjectStore::default();
+        let first = local_projects.load_region("main", &root).unwrap();
+        fs::write(root.join("notes/current.md"), "# Changed after open\n").unwrap();
+        let responses = open_starting_paths_retained(
+            "main",
+            vec![StartingPath::Explicit(root.clone())],
+            &local_projects,
+            false,
+        );
+        assert!(
+            matches!(&responses[0], OpenRegionResponse::Region { region } if region.status.snapshot.id == first.status.snapshot.id)
+        );
+        local_projects
+            .retained_project("main", &first.root, &first.status.snapshot.id)
+            .unwrap();
+        let refreshed = reconstruct_project_path(
+            "main",
+            first.root,
+            &SshSessionManager::default(),
+            &local_projects,
+            false,
+        )
+        .unwrap();
+        assert!(
+            matches!(refreshed, RefreshProjectResponse::Region { region } if region.status.snapshot.id != first.status.snapshot.id)
+        );
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
+    #[test]
     fn region_refresh_after_manifest_removal_keeps_ordinary_files_readable() {
         let fixture = representative_region("region-to-folder-reader");
         let root = fixture.canonicalize().unwrap();
         let local_projects = LocalProjectStore::default();
-        let region = local_projects.load_region(&root).unwrap();
+        let region = local_projects.load_region("main", &root).unwrap();
         let original = fs::read_to_string(root.join("notes/current.md")).unwrap();
         fs::remove_file(root.join(mindflow::project::MANIFEST_FILENAME)).unwrap();
 
         let refreshed = reconstruct_project_path(
+            "main",
             region.root.clone(),
             &SshSessionManager::default(),
             &local_projects,
@@ -2003,12 +2372,12 @@ mod tests {
         ));
         assert_eq!(
             local_projects
-                .validate_reader_root(&region.root, None)
+                .validate_reader_root("main", &region.root, None)
                 .unwrap(),
             region.root
         );
         let reader = local_projects
-            .reader_snapshot(&region.root, "notes/current.md", None)
+            .reader_snapshot("main", &region.root, "notes/current.md", None)
             .unwrap();
         assert_eq!(reader.document.content, original);
         assert_eq!(reader.kind, ReaderDocumentKind::Project);
@@ -2016,6 +2385,7 @@ mod tests {
         assert!(reader.graph.unwrap().documents.is_empty());
         assert!(local_projects
             .reader_snapshot(
+                "main",
                 &region.root,
                 "notes/current.md",
                 Some(&region.status.snapshot.id),
@@ -2178,6 +2548,7 @@ mod tests {
         let local_projects = LocalProjectStore::default();
 
         let refreshed = reconstruct_project_path(
+            "main",
             root.display().to_string(),
             &ssh_sessions,
             &local_projects,
@@ -2194,7 +2565,7 @@ mod tests {
 
         let project = Project::initialize(root.clone()).unwrap_or_else(|error| panic!("{error:#}"));
         let region = local_projects
-            .retain(project)
+            .retain("main", project)
             .unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(region.root, root.display().to_string());
         assert!(region.status.valid);
@@ -2203,6 +2574,7 @@ mod tests {
         assert!(region.opening.files.is_empty());
 
         let refreshed = reconstruct_project_path(
+            "main",
             root.display().to_string(),
             &ssh_sessions,
             &local_projects,

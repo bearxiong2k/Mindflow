@@ -579,7 +579,8 @@ test("the root overview emits a smooth Dagre Mermaid relationship graph", () => 
     `%%{init: {
   "flowchart": {
     "curve": "basis",
-    "padding": 20
+    "padding": 20,
+    "wrappingWidth": 1000000
   }
 }}%%
 flowchart TD
@@ -656,7 +657,7 @@ test("the root overview preserves dotted authored relationships", () => {
 
   assert.match(
     graph.source,
-    /pm2@\{ shape: rounded, label: "Reference note" \} -\. "supports interpretation of" \.-> pm0@\{/,
+    /pm2@\{ shape: rounded, label: "Reference note" \} -\. "supports<br\/>interpretation of" \.-> pm0@\{/,
   );
   assert.equal(graph.keyByComponentId.has("canonical"), true);
 });
@@ -816,7 +817,7 @@ test("Mermaid node and relationship text cannot escape generated labels", () => 
   assert.doesNotMatch(graph.source, /<unsafe>/);
   assert.doesNotMatch(graph.source, /"quoted"/);
   assert.doesNotMatch(graph.source, /"governs\|unexpected"/);
-  assert.match(graph.source, /Canonical &quot;quoted&quot; &lt;unsafe&gt;/);
+  assert.match(graph.source, /Canonical<br\/>&quot;quoted&quot; &lt;unsafe&gt;/);
   assert.match(graph.source, /governs&#124;unexpected/);
 });
 

@@ -1,9 +1,10 @@
 import { normalizeCanvasTextScale } from "./canvasTextScale";
+import { createMermaidRenderQueue, mermaidRenderAborted, type MermaidRenderOptions } from "./mermaidRenderQueue.ts";
 
 type Mermaid = typeof import("mermaid")["default"];
 
 let mermaidRequest: Promise<Mermaid> | undefined;
-let mermaidRenderOperation: Promise<void> = Promise.resolve();
+const enqueueMermaidRender = createMermaidRenderQueue();
 
 function mermaidConfiguration(textScale = 1) {
   const fontSize = 16 * normalizeCanvasTextScale(textScale);
@@ -40,16 +41,13 @@ export function renderMermaid(
   diagramId: string,
   source: string,
   textScale = 1,
+  options: MermaidRenderOptions = {},
 ) {
   const operation = async () => {
     const mermaid = await loadMermaid();
+    if (options.signal?.aborted) throw mermaidRenderAborted();
     mermaid.initialize(mermaidConfiguration(textScale));
     return mermaid.render(diagramId, source);
   };
-  const result = mermaidRenderOperation.then(operation, operation);
-  mermaidRenderOperation = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
+  return enqueueMermaidRender(operation, options);
 }

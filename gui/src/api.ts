@@ -9,10 +9,32 @@ import type {
   ReaderWindowSnapshot,
   RefreshProjectResponse,
   RegionResponse,
+  TimelineHistoryResponse,
 } from "./types";
 import type { ReaderNavigationMode } from "./readerNavigation";
 import type { DesktopVersionInfo } from "./versionInfo";
 import { qcSameWindow, type DocumentationQc, type QcHistory, type QcWindow } from "./documentationQc";
+
+const timelineRequests = new Map<string, Promise<TimelineHistoryResponse>>();
+export function loadTimelineHistory(root: string, snapshot: string): Promise<TimelineHistoryResponse> {
+  const key = JSON.stringify([root, snapshot]);
+  const pending = timelineRequests.get(key);
+  if (pending) return pending;
+  const pendingReport: Promise<TimelineHistoryResponse> = browserFixtureActive
+    ? fetch(`/__mindflow_fixture_timeline_history?${new URLSearchParams({ root, snapshot })}`).then(async (response) => {
+        if (!response.ok) throw new Error(await response.text());
+        return response.json();
+      })
+    : invoke<TimelineHistoryResponse>("timeline_history", { root, snapshot });
+  const request = pendingReport.then((report) => {
+    if (report.root !== root || report.snapshot.id !== snapshot) {
+      throw new Error("Timeline history no longer matches this Region. Refresh the project and try again.");
+    }
+    return report;
+  }).finally(() => { timelineRequests.delete(key); });
+  timelineRequests.set(key, request);
+  return request;
+}
 
 const qcRequests = new Map<string, Promise<DocumentationQc>>();
 export function loadDocumentationQc(root: string, snapshot: string, window: QcWindow): Promise<DocumentationQc> {
@@ -95,6 +117,11 @@ export function listSshDestinations(): Promise<string[]> {
   return invoke<string[]>("list_ssh_destinations");
 }
 
+export function closeSshPicker(): Promise<void> {
+  if (browserFixtureActive) return Promise.resolve();
+  return invoke<void>("close_ssh_picker");
+}
+
 export function browseSshDirectory(
   destination: string,
   path: string,
@@ -173,9 +200,9 @@ export function reconcileReaderWindows(
   });
 }
 
-export function closeReaderWindows(root: string): Promise<void> {
+export function closeProject(root: string): Promise<void> {
   if (browserFixtureActive) return Promise.resolve();
-  return invoke<void>("close_reader_windows", { root });
+  return invoke<void>("close_project", { root });
 }
 
 export function updateWindowSession(

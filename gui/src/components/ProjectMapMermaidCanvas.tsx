@@ -22,10 +22,10 @@ import {
   type MermaidSvgSize,
 } from "../mermaidRendering";
 import { renderMermaid } from "../mermaidRuntime";
+import { mermaidRenderAborted } from "../mermaidRenderQueue";
 import {
   PROJECT_MAP_METRIC_TREND_SPACE,
   PROJECT_MAP_METRIC_SIZE_SPACE,
-  PROJECT_MAP_METRIC_GAP_SPACE,
   projectMapMermaidRenderedNodeId,
   projectMapRoleLabel,
   type ProjectMapMermaidConnection,
@@ -73,7 +73,7 @@ interface ProjectMapMermaidCanvasProps {
   ) => void;
   preloadGraph?: ProjectMapMermaidGraph;
   onPrepare?: (
-    component: ProjectComponent,
+    component?: ProjectComponent,
     expandedRegionDepth?: number,
   ) => void;
   onRenderedGraphChange: (rendered: ProjectMapRenderedGraph) => void;
@@ -100,6 +100,8 @@ interface MermaidRenderState {
 type ProjectMapActionKind = "enter" | "reader" | "external" | "inspect";
 
 const PROJECT_MAP_RENDER_CACHE_LIMIT = 24;
+const PROJECT_MAP_LAYOUT_CACHE_LIMIT = 8;
+const PROJECT_MAP_SVG_CACHE_CHARACTERS = 8_000_000;
 
 function mermaidRenderKey(source: string, textScale: number) {
   return `${textScale}\u0000${source}`;
@@ -111,12 +113,14 @@ function projectMapInteractionKey(
 ) {
   const parts: string[] = [graph.origin];
   for (const [key, component] of graph.nodeByKey) {
+    parts.push(component.label, graph.effectiveRoles.get(component.id) ?? "");
     parts.push(component.description ?? "");
     parts.push(
       `node:${key}:${component.id}:${component.kind}:${childrenByParent.get(component.id)?.length ?? 0}`,
     );
   }
   for (const [key, component] of graph.layerByKey) {
+    parts.push(component.label, graph.effectiveRoles.get(component.id) ?? "");
     parts.push(component.description ?? "");
     parts.push(
       `layer:${key}:${component.id}:${component.kind}:${childrenByParent.get(component.id)?.length ?? 0}:${graph.layerVisibleDepthByKey.get(key) ?? 0}`,
@@ -196,14 +200,14 @@ function annotateMetrics(visual: SVGElement, component: ProjectComponent, graph:
   if (!metric) return "";
   visual.setAttribute("data-project-map-metrics", "true");
   visual.setAttribute("data-metric-direction", metric.direction);
-  const labels = new Set([PROJECT_MAP_METRIC_GAP_SPACE, PROJECT_MAP_METRIC_TREND_SPACE, PROJECT_MAP_METRIC_SIZE_SPACE]);
+  const labels = new Set([PROJECT_MAP_METRIC_TREND_SPACE, PROJECT_MAP_METRIC_SIZE_SPACE]);
   const candidates = [...visual.querySelectorAll<SVGElement>("text, tspan")].filter((text) => {
     if (text.closest("g.node, g.cluster") !== visual) return false;
     const value = text.textContent?.trim() ?? "";
     return labels.has(value) && text.parentElement?.textContent?.trim() !== value;
   });
-  // The final three lines are ours; a real name or description may use the same words.
-  for (const text of candidates.slice(-3)) text.classList.add("project-map-metric-space");
+  // The final two lines are ours; a real name may use the same words.
+  for (const text of candidates.slice(-2)) text.classList.add("project-map-metric-space");
   const absoluteVolume = [...visual.querySelectorAll<SVGElement>("text, tspan")].filter((text) =>
     text.closest("g.node, g.cluster") === visual
     && text.textContent?.trim() === metric.lineCountLabel
@@ -247,28 +251,40 @@ function installProjectMapMetricCharts(svg: SVGSVGElement, graph: ProjectMapMerm
     if (!metric || !comparison) continue;
     const spaces = [...visual.querySelectorAll<SVGTextContentElement>(".project-map-metric-space")]
       .filter((space) => space.closest("g.node, g.cluster") === visual);
-    if (spaces.length < 3) continue;
-    // Leave the first reserved row empty so the chart has its own footer
-    // separated from the absolute volume.
-    const first = spaces[1];
+    const volume = [...visual.querySelectorAll<SVGTextPositioningElement>(".project-map-metric-volume")]
+      .find((text) => text.closest("g.node, g.cluster") === visual);
+    if (spaces.length < 2 || !volume) continue;
+    const first = spaces[0];
     const last = spaces.at(-1)!;
     const label = first.closest("g.label, g.cluster-label") as SVGGraphicsElement | null;
     if (!label) continue;
     const firstBounds = projectMapMetricTextBounds(first);
     const lastBounds = projectMapMetricTextBounds(last);
-    if (!firstBounds || !lastBounds) continue;
+    const volumeBounds = projectMapMetricTextBounds(volume);
+    if (!firstBounds || !lastBounds || !volumeBounds) continue;
+    const name = volume.previousElementSibling as SVGTextContentElement | null;
+    const nameBounds = name ? projectMapMetricTextBounds(name) : undefined;
     const textMatrix = first.getScreenCTM();
     const labelMatrix = label.getScreenCTM();
     if (!textMatrix || !labelMatrix) continue;
     const left = Math.min(firstBounds.x, lastBounds.x);
     const right = Math.max(firstBounds.x + firstBounds.width, lastBounds.x + lastBounds.width);
     const width = Math.min(140, right - left);
-    const height = lastBounds.y + lastBounds.height - firstBounds.y;
-    const scale = Math.min(width / 132, height / 36);
-    if (!(scale > 0)) continue;
+    // Group the count with its chart, leaving a larger gap below the name.
+    // Measure the name's last row as well: its glyph height varies between
+    // fonts and expanded folder labels. Each row has an absolute y, so moving
+    // the count leaves later reservations and the measured node box in place.
+    const volumeOffset = nameBounds
+      ? Math.max(0, nameBounds.y + nameBounds.height + firstBounds.height * 0.45 - volumeBounds.y)
+      : 0;
+    const chartTop = volumeBounds.y + volumeBounds.height + volumeOffset + firstBounds.height * 0.12;
+    const height = lastBounds.y + lastBounds.height - chartTop;
+    const scaleX = width / 132;
+    const scaleY = Math.min(scaleX, height / 36);
+    if (!(scaleX > 0 && scaleY > 0)) continue;
     const matrix = labelMatrix.inverse().multiply(textMatrix)
-      .translate((left + right) / 2 - 66 * scale, firstBounds.y + (height - 36 * scale) / 2)
-      .scale(scale);
+      .translate((left + right) / 2 - 66 * scaleX, chartTop)
+      .scale(scaleX, scaleY);
     const chart = metricSvgElement("g", {
       class: "project-map-metric-chart", "data-metric-direction": metric.direction,
       transform: `matrix(${matrix.a} ${matrix.b} ${matrix.c} ${matrix.d} ${matrix.e} ${matrix.f})`,
@@ -294,6 +310,9 @@ function installProjectMapMetricCharts(svg: SVGSVGElement, graph: ProjectMapMerm
     chart.append(metricSvgElement("rect", { x: 0, y: 30, width: 112, height: 4, rx: 2, fill: "#dce3e9" }));
     chart.append(metricSvgElement("rect", { x: 0, y: 30, width: 112 * comparison.ratio, height: 4, rx: 2, fill: color, opacity: 0.7 }));
     chart.setAttribute("data-volume-ratio", String(comparison.ratio));
+    const volumeBaseline = volume.getStartPositionOfChar(0).y;
+    volume.setAttribute("y", String(volumeBaseline + volumeOffset));
+    volume.setAttribute("dy", "0");
     for (const space of spaces) {
       space.style.opacity = "0";
       space.setAttribute("aria-hidden", "true");
@@ -578,7 +597,7 @@ function projectMapRectContainsCenter(
   );
 }
 
-function translateProjectMapVisual(
+function prepareProjectMapVisualTranslation(
   element: SVGElement,
   svg: SVGSVGElement,
   x: number,
@@ -587,12 +606,12 @@ function translateProjectMapVisual(
   const parent = element.parentElement as unknown as SVGGraphicsElement;
   const parentMatrix = parent.getScreenCTM();
   const svgMatrix = svg.getScreenCTM();
-  if (!parentMatrix || !svgMatrix) return;
+  if (!parentMatrix || !svgMatrix) return () => {};
   const matrix = parentMatrix.inverse().multiply(svgMatrix);
   const dx = matrix.a * x + matrix.c * y;
   const dy = matrix.b * x + matrix.d * y;
   const current = element.getAttribute("transform")?.trim();
-  element.setAttribute("transform", `translate(${dx} ${dy})${current ? ` ${current}` : ""}`);
+  return () => element.setAttribute("transform", `translate(${dx} ${dy})${current ? ` ${current}` : ""}`);
 }
 
 function foldMeasuredProjectMapChain(
@@ -608,16 +627,21 @@ function foldMeasuredProjectMapChain(
   ]));
   const order = projectMapDirectedChain([...byId.keys()], graph.connections);
   if (!order) return false;
+  const connectionIndexBySource = new Map(graph.connections.map(({ source }, index) => [source, index]));
+  const labelsByKey = new Map(group.visuals.filter(({ element }) => element.matches("g.edgeLabel"))
+    .map((visual) => [visual.element.getAttribute(PROJECT_MAP_CONNECTION_KEY_ATTRIBUTE), visual]));
+  const pathsByKey = new Map<string, SVGPathElement[]>();
+  for (const path of svg.querySelectorAll<SVGPathElement>(`path[${PROJECT_MAP_CONNECTION_KEY_ATTRIBUTE}]`)) {
+    const key = path.getAttribute(PROJECT_MAP_CONNECTION_KEY_ATTRIBUTE)!;
+    const paths = pathsByKey.get(key) ?? [];
+    paths.push(path);
+    pathsByKey.set(key, paths);
+  }
   const edges = order.slice(0, -1).map((id) => {
-    const index = graph.connections.findIndex(({ source }) => source === id);
+    const index = connectionIndexBySource.get(id);
     const key = `connection-${index}`;
-    const label = group.visuals.find(({ element }) =>
-      element.matches("g.edgeLabel") &&
-      element.getAttribute(PROJECT_MAP_CONNECTION_KEY_ATTRIBUTE) === key,
-    );
-    const paths = Array.from(svg.querySelectorAll<SVGPathElement>(
-      `path[${PROJECT_MAP_CONNECTION_KEY_ATTRIBUTE}="${key}"]`,
-    ));
+    const label = labelsByKey.get(key);
+    const paths = pathsByKey.get(key) ?? [];
     return { label, paths };
   });
   if (edges.some(({ label, paths }) => !label || paths.length === 0)) return false;
@@ -627,12 +651,14 @@ function foldMeasuredProjectMapChain(
     /^flowchart (BT|RL)$/m.test(graph.source),
   );
   if (!folded) return false;
+  // Read coordinate transforms as one batch before changing any SVG geometry.
+  const changes: Array<() => void> = [];
   for (const placement of folded.placements) {
     const node = byId.get(placement.id)!;
-    translateProjectMapVisual(node.element, svg,
+    changes.push(prepareProjectMapVisualTranslation(node.element, svg,
       group.bounds.x + placement.x - node.bounds.x,
       group.bounds.y + placement.y - node.bounds.y,
-    );
+    ));
   }
   folded.routes.forEach((route, index) => {
     const { paths, label } = edges[index];
@@ -643,16 +669,19 @@ function foldMeasuredProjectMapChain(
       if (!parentMatrix || !svgMatrix) continue;
       const matrix = parentMatrix.inverse().multiply(svgMatrix)
         .translate(group.bounds.x, group.bounds.y);
-      path.setAttribute("d", route.path);
-      path.setAttribute("transform",
-        `matrix(${matrix.a} ${matrix.b} ${matrix.c} ${matrix.d} ${matrix.e} ${matrix.f})`,
-      );
+      changes.push(() => {
+        path.setAttribute("d", route.path);
+        path.setAttribute("transform",
+          `matrix(${matrix.a} ${matrix.b} ${matrix.c} ${matrix.d} ${matrix.e} ${matrix.f})`,
+        );
+      });
     }
-    translateProjectMapVisual(label!.element, svg,
+    changes.push(prepareProjectMapVisualTranslation(label!.element, svg,
       group.bounds.x + route.label.x - label!.bounds.x,
       group.bounds.y + route.label.y - label!.bounds.y,
-    );
+    ));
   });
+  for (const change of changes) change();
   return true;
 }
 
@@ -662,10 +691,10 @@ function foldMeasuredProjectMapChain(
  * node, route, hit path, label, and real containment box together.
  */
 async function packDisconnectedMermaidComponents(
-  svg: string,
+  svg: SVGSVGElement,
   graph: ProjectMapMermaidGraph,
 ) {
-  if (!document.body) return svg;
+  if (!document.body) return svg.outerHTML;
   const stage = document.createElement("div");
   stage.className = `project-map-mermaid project-map-mermaid--${graph.origin} project-map-mermaid__measurement`;
   stage.setAttribute("aria-hidden", "true");
@@ -678,12 +707,16 @@ async function packDisconnectedMermaidComponents(
     "pointer-events:none",
     "overflow:visible",
   ].join(";");
-  stage.innerHTML = `<div class="project-map-mermaid__svg">${svg}</div>`;
+  const wrapper = document.createElement("div");
+  wrapper.className = "project-map-mermaid__svg";
+  // Adopt the annotated SVG directly. Serializing and reparsing the complete
+  // graph here duplicates a large DOM before any measurement has begun.
+  wrapper.append(svg);
+  stage.append(wrapper);
   document.body.append(stage);
 
   try {
-    const rendered = stage.querySelector<SVGSVGElement>("svg");
-    if (!rendered) return svg;
+    const rendered = svg;
     installProjectMapMetricCharts(rendered, graph);
     const rawViewBox = rendered.viewBox.baseVal;
     if (rawViewBox.width <= 0 || rawViewBox.height <= 0) return rendered.outerHTML;
@@ -836,6 +869,7 @@ async function packDisconnectedMermaidComponents(
       (group): group is ProjectMapVisualPackingGroup => group !== undefined,
     );
     let foldedChains = 0;
+    const translations: Array<() => void> = [];
     for (const group of groups) {
       if (!foldMeasuredProjectMapChain(group, rendered, graph)) continue;
       foldedChains += 1;
@@ -870,9 +904,10 @@ async function packDisconnectedMermaidComponents(
       const translateX = gridLeft + placement.x - group.bounds.x;
       const translateY = gridTop + placement.y - group.bounds.y;
       for (const { element } of group.visuals) {
-        translateProjectMapVisual(element, rendered, translateX, translateY);
+        translations.push(prepareProjectMapVisualTranslation(element, rendered, translateX, translateY));
       }
     }
+    for (const translate of translations) translate();
 
     const finalBounds = unionProjectMapSvgRects(
       Array.from(
@@ -1008,7 +1043,7 @@ async function interactiveMermaidSvg(
     activationTarget.classList.add("project-map-layer-cluster__label");
   }
   return packDisconnectedMermaidComponents(
-    new XMLSerializer().serializeToString(parsed.documentElement),
+    parsed.documentElement as unknown as SVGSVGElement,
     graph,
   );
 }
@@ -1038,8 +1073,9 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
   const reactId = useId();
   const diagramId = `mindflow-project-map-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const renderCacheRef = useRef(new Map<string, MermaidRenderState>());
+  const layoutCacheRef = useRef(new Map<string, string>());
   const renderRequestsRef = useRef(
-    new Map<string, Promise<MermaidRenderState>>(),
+    new Map<string, { promise: Promise<MermaidRenderState>; controller: AbortController }>(),
   );
   const preloadRenderSequenceRef = useRef(0);
   const svgContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1059,6 +1095,20 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
         : undefined,
     [childrenByParent, preloadGraph, textScale],
   );
+  const activeRenderKeyRef = useRef(renderKey);
+  useLayoutEffect(() => {
+    activeRenderKeyRef.current = renderKey;
+    for (const [key, request] of renderRequestsRef.current) {
+      if (key !== renderKey && key !== preloadRenderKey) {
+        request.controller.abort();
+        renderRequestsRef.current.delete(key);
+      }
+    }
+  }, [renderKey, preloadRenderKey]);
+  useEffect(() => () => {
+    for (const request of renderRequestsRef.current.values()) request.controller.abort();
+    renderRequestsRef.current.clear();
+  }, []);
   const tooltipId = `${diagramId}-node-tooltip`;
   const tooltipRef = useRef<HTMLDivElement>(null);
   const dismissedTooltipVisual = useRef<SVGElement | undefined>(undefined);
@@ -1158,18 +1208,37 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
     const cached = renderCacheRef.current.get(targetRenderKey);
     if (cached) return Promise.resolve(cached);
     const pending = renderRequestsRef.current.get(targetRenderKey);
-    if (pending) return pending;
-    const request = renderMermaid(
-      targetDiagramId,
-      targetGraph.source,
-      textScale,
-    )
+    if (pending && !pending.controller.signal.aborted) return pending.promise;
+    const controller = new AbortController();
+    const layoutKey = mermaidRenderKey(targetGraph.source, textScale);
+    const cachedLayout = layoutCacheRef.current.get(layoutKey);
+    if (cachedLayout) {
+      layoutCacheRef.current.delete(layoutKey);
+      layoutCacheRef.current.set(layoutKey, cachedLayout);
+    }
+    // Metadata changes update exact labels/actions without repeating Dagre.
+    const layout = cachedLayout ? Promise.resolve({ svg: cachedLayout }) : renderMermaid(
+      targetDiagramId, targetGraph.source, textScale,
+      { signal: controller.signal, priority: () => activeRenderKeyRef.current === targetRenderKey ? "foreground" : "background" },
+    );
+    const request = layout
       .then(async ({ svg }) => {
+        if (controller.signal.aborted) throw mermaidRenderAborted();
+        if (!cachedLayout && svg.length <= PROJECT_MAP_SVG_CACHE_CHARACTERS) {
+          layoutCacheRef.current.set(layoutKey, svg);
+          let characters = [...layoutCacheRef.current.values()].reduce((sum, value) => sum + value.length, 0);
+          while (layoutCacheRef.current.size > PROJECT_MAP_LAYOUT_CACHE_LIMIT || characters > PROJECT_MAP_SVG_CACHE_CHARACTERS) {
+            const oldest = layoutCacheRef.current.keys().next().value!;
+            characters -= layoutCacheRef.current.get(oldest)!.length;
+            layoutCacheRef.current.delete(oldest);
+          }
+        }
         const interactiveSvg = await interactiveMermaidSvg(
           svg,
           targetGraph,
           childrenByParent,
         );
+        if (controller.signal.aborted) throw mermaidRenderAborted();
         const size = mermaidSvgSize(interactiveSvg);
         const nextState: MermaidRenderState = {
           key: targetRenderKey,
@@ -1179,19 +1248,23 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
           svg: interactiveSvg,
           size,
         };
-        renderCacheRef.current.set(targetRenderKey, nextState);
-        if (renderCacheRef.current.size > PROJECT_MAP_RENDER_CACHE_LIMIT) {
-          const oldestKey = renderCacheRef.current.keys().next().value;
-          if (oldestKey) renderCacheRef.current.delete(oldestKey);
+        if (interactiveSvg.length <= PROJECT_MAP_SVG_CACHE_CHARACTERS) {
+          renderCacheRef.current.set(targetRenderKey, nextState);
+          let characters = [...renderCacheRef.current.values()].reduce((sum, value) => sum + (value.svg?.length ?? 0), 0);
+          while (renderCacheRef.current.size > PROJECT_MAP_RENDER_CACHE_LIMIT || characters > PROJECT_MAP_SVG_CACHE_CHARACTERS) {
+            const oldest = renderCacheRef.current.keys().next().value!;
+            characters -= renderCacheRef.current.get(oldest)!.svg?.length ?? 0;
+            renderCacheRef.current.delete(oldest);
+          }
         }
         return nextState;
       })
       .finally(() => {
-        if (renderRequestsRef.current.get(targetRenderKey) === request) {
+        if (renderRequestsRef.current.get(targetRenderKey)?.promise === request) {
           renderRequestsRef.current.delete(targetRenderKey);
         }
       });
-    renderRequestsRef.current.set(targetRenderKey, request);
+    renderRequestsRef.current.set(targetRenderKey, { promise: request, controller });
     return request;
   };
   useEffect(() => {
@@ -1241,31 +1314,38 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
       !preloadRenderKey ||
       preloadRenderKey === renderKey ||
       renderCacheRef.current.has(preloadRenderKey) ||
-      renderRequestsRef.current.has(preloadRenderKey)
+      renderRequestsRef.current.has(preloadRenderKey) ||
+      // Dense layouts remain available on activation; pointer travel should
+      // not start an expensive synchronous layout speculatively.
+      preloadGraph.layout.pressure.nodeCount > 48 ||
+      preloadGraph.layout.pressure.connectionCount > 96
     ) {
       return;
     }
-    preloadRenderSequenceRef.current += 1;
-    const preloadDiagramId = `${diagramId}-preload-${preloadRenderSequenceRef.current}`;
-    const preloadStartedAt = performance.now();
-    void requestRenderedGraph(
-      preloadGraph,
-      preloadRenderKey,
-      preloadDiagramId,
-    )
-      .then(() => {
-        performance.mark("mindflow:structure:destination-prepared");
-        if (import.meta.env.DEV) {
-          console.debug(
-            `[mindflow-performance] mindflow:structure:destination-prepared ${(
-              performance.now() - preloadStartedAt
-            ).toFixed(1)}ms`,
-          );
-        }
-      })
-      .catch(() => {
-        // Intent preloading is opportunistic; active rendering reports failures.
-      });
+    const timer = window.setTimeout(() => {
+      preloadRenderSequenceRef.current += 1;
+      const preloadDiagramId = `${diagramId}-preload-${preloadRenderSequenceRef.current}`;
+      const preloadStartedAt = performance.now();
+      void requestRenderedGraph(
+        preloadGraph,
+        preloadRenderKey,
+        preloadDiagramId,
+      )
+        .then(() => {
+          performance.mark("mindflow:structure:destination-prepared");
+          if (import.meta.env.DEV) {
+            console.debug(
+              `[mindflow-performance] mindflow:structure:destination-prepared ${(
+                performance.now() - preloadStartedAt
+              ).toFixed(1)}ms`,
+            );
+          }
+        })
+        .catch(() => {
+          // Intent preloading is opportunistic; active rendering reports failures.
+        });
+    }, 100);
+    return () => window.clearTimeout(timer);
   }, [
     childrenByParent,
     diagramId,
@@ -1419,6 +1499,7 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
     linkedHoverRef.current = undefined;
     const connection = projectMapConnectionFromEventTarget(event.target);
     if (connection) {
+      onPrepare?.(undefined);
       setComponentTooltip(undefined);
       setProjectMapConnectionHover(event.currentTarget, connection);
       onHoverComponent?.(undefined);
@@ -1427,9 +1508,7 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
     const visual = componentVisualFromEventTarget(event.target);
     const resolved = visual ? visualComponent(visual) : undefined;
     showComponentTooltip(visual);
-    if (resolved) {
-      onPrepare?.(resolved.component, resolved.expandedRegionDepth);
-    }
+    onPrepare?.(resolved?.component, resolved?.expandedRegionDepth);
     setProjectMapComponentHover(
       event.currentTarget,
       visual,
@@ -1454,6 +1533,7 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
     linkedHoverRef.current = undefined;
     const connection = projectMapConnectionFromEventTarget(event.relatedTarget);
     if (connection) {
+      onPrepare?.(undefined);
       setComponentTooltip(undefined);
       setProjectMapConnectionHover(event.currentTarget, connection);
       onHoverComponent?.(undefined);
@@ -1468,6 +1548,7 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
       visual,
     );
     const resolved = visual ? visualComponent(visual) : undefined;
+    onPrepare?.(resolved?.component, resolved?.expandedRegionDepth);
     onHoverComponent?.(resolved?.component.id, resolved?.expandedRegionDepth !== undefined);
   };
 
@@ -1507,6 +1588,7 @@ export const ProjectMapMermaidCanvas = memo(function ProjectMapMermaidCanvas({
             setComponentTooltip(undefined);
             dismissedTooltipVisual.current = undefined;
             if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+            onPrepare?.(undefined);
             if (linkedHoverRef.current) return;
             setProjectMapComponentHover(event.currentTarget, null);
             onHoverComponent?.(undefined);

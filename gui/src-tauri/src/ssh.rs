@@ -13,7 +13,7 @@ use mindflow::bridge::{
     REQUIRED_CAPABILITIES, STDERR_LIMIT_BYTES,
 };
 use mindflow::human::{
-    FolderPickerResponse, OpenProjectResponse, ProjectDirectoryResponse, ReaderProjectSnapshot,
+    FolderPickerResponse, OpenProjectResponse, ProjectDirectoryResponse, ReaderProjectSnapshot, RegionResponse,
 };
 use mindflow::version::{ProjectVersion, RuntimeVersion};
 
@@ -25,37 +25,65 @@ pub struct SshProjectAccess {
     pub root: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct SshSessionKey {
+    owner: String,
+    destination: String,
+    root: String,
+}
+
+impl SshSessionKey {
+    fn new(owner: &str, destination: &str, root: &str) -> Self {
+        Self {
+            owner: owner.to_owned(),
+            destination: destination.to_owned(),
+            root: root.to_owned(),
+        }
+    }
+}
+
 pub struct SshSessionManager {
-    sessions: Mutex<BTreeMap<String, Arc<Mutex<SshSession>>>>,
+    sessions: Mutex<BTreeMap<SshSessionKey, Arc<Mutex<SshSession>>>>,
+    pending: Mutex<BTreeMap<SshSessionKey, Arc<()>>>,
 }
 
 impl Default for SshSessionManager {
     fn default() -> Self {
         Self {
             sessions: Mutex::new(BTreeMap::new()),
+            pending: Mutex::new(BTreeMap::new()),
         }
     }
 }
 
 impl SshSessionManager {
-    pub fn versions(&self, access: &SshProjectAccess) -> Option<(RuntimeVersion, ProjectVersion)> {
+    pub fn versions(
+        &self,
+        owner: &str,
+        access: &SshProjectAccess,
+    ) -> Option<(RuntimeVersion, ProjectVersion)> {
         // Reading version details never opens or reconnects a remote session.
-        self.with_session(&access.destination, false, |session| {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
             let runtime = session.runtime.clone().ok_or("Unknown core version")?;
-            let project = session.regions.get(&access.root)
-                .map(|region| region.version.clone()).unwrap_or_default();
+            let project = session
+                .regions
+                .get(&access.root)
+                .map(|region| region.version.clone())
+                .unwrap_or_default();
             Ok((runtime, project))
-        }).ok()
+        })
+        .ok()
     }
 
     pub fn browse_directory(
         &self,
+        owner: &str,
         destination: &str,
         path: &str,
         connect_if_missing: bool,
     ) -> Result<FolderPickerResponse, String> {
         validate_destination(destination)?;
-        self.with_session(destination, connect_if_missing, |session| {
+        self.with_session(owner, destination, "", connect_if_missing, |session| {
             let result = session.request(BridgeCall::BrowseDirectory(OpenProjectParams {
                 path: path.to_owned(),
             }))?;
@@ -68,13 +96,36 @@ impl SshSessionManager {
         })
     }
 
+    fn opened_region(&self, key: &SshSessionKey) -> Result<Option<RegionResponse>, String> {
+        let session = self
+            .sessions
+            .lock()
+            .map_err(|_| "SSH session registry is unavailable")?
+            .get(key)
+            .cloned();
+        session
+            .map(|session| {
+                session
+                    .lock()
+                    .map_err(|_| "SSH session is unavailable".to_owned())
+                    .map(|session| session.regions.get(&key.root).cloned())
+            })
+            .transpose()
+            .map(Option::flatten)
+    }
+
     pub fn open_project(
         &self,
+        owner: &str,
         destination: &str,
         path: &str,
     ) -> Result<OpenProjectResponse, String> {
         validate_destination(destination)?;
-        self.with_session(destination, true, |session| {
+        let requested = SshSessionKey::new(owner, destination, path);
+        if let Some(region) = self.opened_region(&requested)? {
+            return qualify_open_response(destination, OpenProjectResponse::Region { region });
+        }
+        let response = self.with_session(owner, destination, path, true, |session| {
             let result = session.request(BridgeCall::OpenProject(OpenProjectParams {
                 path: path.to_owned(),
             }))?;
@@ -85,37 +136,76 @@ impl SshSessionManager {
                 }
                 other => Err(unexpected_result(session, "open-project", &other)),
             }
-        })
+        });
+        let canonical = match &response {
+            Ok(OpenProjectResponse::Region { region }) => Some(region.root.as_str()),
+            Ok(OpenProjectResponse::Folder { root, .. }) => Some(root.as_str()),
+            _ => None,
+        };
+        let canonical_key = canonical
+            .map(|qualified_root| {
+                parse_access_root(qualified_root)?
+                    .ok_or_else(|| "SSH open omitted its access identity".to_owned())
+                    .map(|access| SshSessionKey::new(owner, destination, &access.root))
+            })
+            .transpose()?;
+        if let Some(key) = canonical_key.as_ref().filter(|key| *key != &requested) {
+            if let Some(region) = self.opened_region(key)? {
+                self.sessions
+                    .lock()
+                    .map_err(|_| "SSH session registry is unavailable")?
+                    .remove(&requested);
+                return qualify_open_response(destination, OpenProjectResponse::Region { region });
+            }
+        }
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| "SSH session registry is unavailable")?;
+        if let Some(session) = sessions.remove(&requested) {
+            if let Some(key) = canonical_key {
+                sessions.insert(key, session);
+            }
+        }
+        response
     }
 
     pub fn refresh_project(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         connect_if_missing: bool,
     ) -> Result<OpenProjectResponse, String> {
-        self.with_session(&access.destination, connect_if_missing, |session| {
-            let result = session.request(BridgeCall::RefreshProject(RootParams {
-                root: access.root.clone(),
-            }))?;
-            match result {
-                BridgeResult::RefreshProject(response) => {
-                    session.cache_refresh_response(&access.root, &response);
-                    session.accept_protocol_result(qualify_open_response(
-                        &access.destination,
-                        response,
-                    ))
+        self.with_session(
+            owner,
+            &access.destination,
+            &access.root,
+            connect_if_missing,
+            |session| {
+                let result = session.request(BridgeCall::RefreshProject(RootParams {
+                    root: access.root.clone(),
+                }))?;
+                match result {
+                    BridgeResult::RefreshProject(response) => {
+                        session.cache_refresh_response(&access.root, &response);
+                        session.accept_protocol_result(qualify_open_response(
+                            &access.destination,
+                            response,
+                        ))
+                    }
+                    other => Err(unexpected_result(session, "refresh-project", &other)),
                 }
-                other => Err(unexpected_result(session, "refresh-project", &other)),
-            }
-        })
+            },
+        )
     }
 
     pub fn list_directory(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         path: &str,
     ) -> Result<ProjectDirectoryResponse, String> {
-        self.with_session(&access.destination, false, |session| {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
             let result = session.request(BridgeCall::ListDirectory(ProjectPathParams {
                 root: access.root.clone(),
                 path: path.to_owned(),
@@ -129,22 +219,39 @@ impl SshSessionManager {
 
     pub fn documentation_qc(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         snapshot: &str,
         window: mindflow::documentation_qc::QcWindow,
     ) -> Result<mindflow::documentation_qc::DocumentationQc, String> {
-        self.with_session(&access.destination, false, |session| {
-            if session.regions.get(&access.root).map(|region| region.snapshot.as_str()) != Some(snapshot) {
-                return Err("QC requires the retained SSH Region snapshot; refresh the project first".into());
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
+            if session
+                .regions
+                .get(&access.root)
+                .map(|region| region.status.snapshot.id.as_str())
+                != Some(snapshot)
+            {
+                return Err(
+                    "QC requires the retained SSH Region snapshot; refresh the project first"
+                        .into(),
+                );
             }
-            let result = session.request(BridgeCall::DocumentationQc(bridge::DocumentationQcParams {
-                root: access.root.clone(), snapshot: snapshot.into(), window: window.clone(),
-            }))?;
+            let result =
+                session.request(BridgeCall::DocumentationQc(bridge::DocumentationQcParams {
+                    root: access.root.clone(),
+                    snapshot: snapshot.into(),
+                    window: window.clone(),
+                }))?;
             match result {
                 BridgeResult::DocumentationQc(mut report) => {
-                    if report.root != access.root || report.snapshot.id != snapshot
-                        || report.schema != "mindflow-documentation-qc/v2" || report.window != window {
-                        return Err(session.protocol_failure("SSH QC response does not match the requested observation"));
+                    if report.root != access.root
+                        || report.snapshot.id != snapshot
+                        || report.schema != "mindflow-documentation-qc/v2"
+                        || report.window != window
+                    {
+                        return Err(session.protocol_failure(
+                            "SSH QC response does not match the requested observation",
+                        ));
                     }
                     report.root = encode_access_root(&access.destination, &report.root)?;
                     Ok(report)
@@ -154,14 +261,53 @@ impl SshSessionManager {
         })
     }
 
+    pub fn timeline_history(
+        &self,
+        owner: &str,
+        access: &SshProjectAccess,
+        snapshot: &str,
+    ) -> Result<mindflow::human::TimelineHistoryResponse, String> {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
+            if session
+                .regions
+                .get(&access.root)
+                .map(|region| region.status.snapshot.id.as_str())
+                != Some(snapshot)
+            {
+                return Err(
+                    "Timeline requires the retained SSH Region snapshot; refresh the project first"
+                        .into(),
+                );
+            }
+            let result =
+                session.request(BridgeCall::TimelineHistory(bridge::TimelineHistoryParams {
+                    root: access.root.clone(),
+                    snapshot: snapshot.into(),
+                }))?;
+            match result {
+                BridgeResult::TimelineHistory(mut report) => {
+                    if report.root != access.root || report.snapshot.id != snapshot {
+                        return Err(session.protocol_failure(
+                            "SSH Timeline history does not match the requested snapshot",
+                        ));
+                    }
+                    report.root = encode_access_root(&access.destination, &report.root)?;
+                    Ok(report)
+                }
+                other => Err(unexpected_result(session, "timeline-history", &other)),
+            }
+        })
+    }
+
     pub fn documentation_qc_history(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         snapshot: &str,
         offset: usize,
     ) -> Result<mindflow::documentation_qc::DocumentationQcHistory, String> {
-        self.with_session(&access.destination, false, |session| {
-            if session.regions.get(&access.root).map(|region| region.snapshot.as_str()) != Some(snapshot) {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
+            if session.regions.get(&access.root).map(|region| region.status.snapshot.id.as_str()) != Some(snapshot) {
                 return Err("QC history requires the retained SSH Region snapshot; refresh the project first".into());
             }
             let result = session.request(BridgeCall::DocumentationQcHistory(bridge::DocumentationQcHistoryParams {
@@ -183,20 +329,21 @@ impl SshSessionManager {
 
     pub fn reader_snapshot(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         path: &str,
         expected_snapshot: Option<&str>,
     ) -> Result<ReaderProjectSnapshot, String> {
-        self.with_session(&access.destination, false, |session| {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
             let cached = session.regions.get(&access.root).cloned();
             let request_snapshot = match (expected_snapshot, cached.as_ref()) {
-                (Some(expected), Some(cached)) if expected == cached.snapshot.as_str() => {
-                    Some(cached.snapshot.clone())
+                (Some(expected), Some(cached)) if expected == cached.status.snapshot.id.as_str() => {
+                    Some(cached.status.snapshot.id.clone())
                 }
                 (Some(expected), Some(cached)) => {
                     return Err(format!(
                         "SSH Reader requested snapshot {expected}, but the retained project snapshot is {}",
-                        cached.snapshot
+                        cached.status.snapshot.id
                     ));
                 }
                 (Some(_), None) => {
@@ -231,7 +378,7 @@ impl SshSessionManager {
                             .snapshot
                             .as_ref()
                             .map(|snapshot| snapshot.id.as_str())
-                            != Some(cached.snapshot.as_str())
+                            != Some(cached.status.snapshot.id.as_str())
                         {
                             return Err(session.protocol_failure(
                                 "SSH Reader response does not match the retained project snapshot",
@@ -261,30 +408,33 @@ impl SshSessionManager {
 
     pub fn reader_snapshot_current(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         path: &str,
     ) -> Result<ReaderProjectSnapshot, String> {
-        let snapshot = self.with_session(&access.destination, false, |session| {
-            Ok(session
-                .regions
-                .get(&access.root)
-                .map(|cached| cached.snapshot.clone()))
-        })?;
-        self.reader_snapshot(access, path, snapshot.as_deref())
+        let snapshot =
+            self.with_session(owner, &access.destination, &access.root, false, |session| {
+                Ok(session
+                    .regions
+                    .get(&access.root)
+                    .map(|cached| cached.status.snapshot.id.clone()))
+            })?;
+        self.reader_snapshot(owner, access, path, snapshot.as_deref())
     }
 
     pub fn validate_reader_root(
         &self,
+        owner: &str,
         access: &SshProjectAccess,
         expected_snapshot: Option<&str>,
     ) -> Result<String, String> {
-        self.with_session(&access.destination, false, |session| {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
             match (expected_snapshot, session.regions.get(&access.root)) {
-                (Some(expected), Some(cached)) if expected == cached.snapshot.as_str() => {}
+                (Some(expected), Some(cached)) if expected == cached.status.snapshot.id.as_str() => {}
                 (Some(expected), Some(cached)) => {
                     return Err(format!(
                         "SSH Reader requested snapshot {expected}, but the retained project snapshot is {}",
-                        cached.snapshot
+                        cached.status.snapshot.id
                     ));
                 }
                 (Some(_), None) => {
@@ -305,8 +455,13 @@ impl SshSessionManager {
         })
     }
 
-    pub fn image_data_url(&self, access: &SshProjectAccess, path: &str) -> Result<String, String> {
-        self.with_session(&access.destination, false, |session| {
+    pub fn image_data_url(
+        &self,
+        owner: &str,
+        access: &SshProjectAccess,
+        path: &str,
+    ) -> Result<String, String> {
+        self.with_session(owner, &access.destination, &access.root, false, |session| {
             let result = session.request(BridgeCall::ReadImage(ProjectPathParams {
                 root: access.root.clone(),
                 path: path.to_owned(),
@@ -318,13 +473,62 @@ impl SshSessionManager {
         })
     }
 
+    pub fn release_picker(&self, owner: &str) -> Result<(), String> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "SSH connection registry is unavailable")?;
+        pending.retain(|key, _| key.owner != owner || !key.root.is_empty());
+        self.sessions
+            .lock()
+            .map_err(|_| "SSH session registry is unavailable")?
+            .retain(|key, _| key.owner != owner || !key.root.is_empty());
+        Ok(())
+    }
+
+    pub fn release_project(&self, owner: &str, access: &SshProjectAccess) -> Result<(), String> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "SSH connection registry is unavailable")?;
+        pending.remove(&SshSessionKey::new(
+            owner,
+            &access.destination,
+            &access.root,
+        ));
+        self.sessions
+            .lock()
+            .map_err(|_| "SSH session registry is unavailable")?
+            .remove(&SshSessionKey::new(
+                owner,
+                &access.destination,
+                &access.root,
+            ));
+        Ok(())
+    }
+
+    pub fn release_workspace(&self, owner: &str) -> Result<(), String> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "SSH connection registry is unavailable")?;
+        pending.retain(|key, _| key.owner != owner);
+        self.sessions
+            .lock()
+            .map_err(|_| "SSH session registry is unavailable")?
+            .retain(|key, _| key.owner != owner);
+        Ok(())
+    }
+
     fn with_session<T>(
         &self,
+        owner: &str,
         destination: &str,
+        root: &str,
         connect_if_missing: bool,
         operation: impl FnOnce(&mut SshSession) -> Result<T, String>,
     ) -> Result<T, String> {
-        let session = self.session(destination, connect_if_missing)?;
+        let session = self.session(owner, destination, root, connect_if_missing)?;
         let (result, healthy) = {
             let mut session = session
                 .lock()
@@ -333,14 +537,16 @@ impl SshSessionManager {
             (result, session.healthy)
         };
         if !healthy {
-            self.remove_if_current(destination, &session);
+            self.remove_if_current(&SshSessionKey::new(owner, destination, root), &session);
         }
         result
     }
 
     fn session(
         &self,
+        owner: &str,
         destination: &str,
+        root: &str,
         connect_if_missing: bool,
     ) -> Result<Arc<Mutex<SshSession>>, String> {
         validate_destination(destination)?;
@@ -349,7 +555,9 @@ impl SshSessionManager {
                 .sessions
                 .lock()
                 .map_err(|_| "SSH session registry is unavailable".to_owned())?;
-            sessions.get(destination).cloned()
+            sessions
+                .get(&SshSessionKey::new(owner, destination, root))
+                .cloned()
         };
         if let Some(session) = existing {
             let running = session
@@ -359,7 +567,7 @@ impl SshSessionManager {
             if running {
                 return Ok(session);
             }
-            self.remove_if_current(destination, &session);
+            self.remove_if_current(&SshSessionKey::new(owner, destination, root), &session);
         }
         if !connect_if_missing {
             return Err(format!(
@@ -367,36 +575,71 @@ impl SshSessionManager {
             ));
         }
 
-        let candidate = Arc::new(Mutex::new(SshSession::connect(destination)?));
-        let mut sessions = self
+        let key = SshSessionKey::new(owner, destination, root);
+        let ticket = self.connection_ticket(&key)?;
+        let candidate =
+            SshSession::connect(destination).map(|session| Arc::new(Mutex::new(session)));
+        self.finish_connection(key, &ticket, candidate)
+    }
+
+    fn connection_ticket(&self, key: &SshSessionKey) -> Result<Arc<()>, String> {
+        let ticket = Arc::new(());
+        self.pending
+            .lock()
+            .map_err(|_| "SSH connection registry is unavailable")?
+            .insert(key.clone(), Arc::clone(&ticket));
+        Ok(ticket)
+    }
+
+    fn finish_connection(
+        &self,
+        key: SshSessionKey,
+        ticket: &Arc<()>,
+        candidate: Result<Arc<Mutex<SshSession>>, String>,
+    ) -> Result<Arc<Mutex<SshSession>>, String> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "SSH connection registry is unavailable")?;
+        if !pending
+            .get(&key)
+            .is_some_and(|current| Arc::ptr_eq(current, ticket))
+        {
+            return Err("SSH project or picker was closed or replaced while connecting".to_owned());
+        }
+        pending.remove(&key);
+        Ok(self
             .sessions
             .lock()
-            .map_err(|_| "SSH session registry is unavailable".to_owned())?;
-        Ok(sessions
-            .entry(destination.to_owned())
-            .or_insert(candidate)
+            .map_err(|_| "SSH session registry is unavailable")?
+            .entry(key)
+            .or_insert(candidate?)
             .clone())
     }
 
-    fn remove_if_current(&self, destination: &str, failed: &Arc<Mutex<SshSession>>) {
+    fn remove_if_current(&self, key: &SshSessionKey, failed: &Arc<Mutex<SshSession>>) {
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
         if sessions
-            .get(destination)
+            .get(key)
             .is_some_and(|current| Arc::ptr_eq(current, failed))
         {
-            sessions.remove(destination);
+            sessions.remove(key);
         }
     }
 
     #[cfg(test)]
-    fn terminate_session_for_test(&self, destination: &str) {
+    fn terminate_session_for_test(&self, owner: &str, access: &SshProjectAccess) {
         let session = self
             .sessions
             .lock()
             .unwrap()
-            .get(destination)
+            .get(&SshSessionKey::new(
+                owner,
+                &access.destination,
+                &access.root,
+            ))
             .cloned()
             .expect("test SSH session is missing");
         let mut session = session.lock().unwrap();
@@ -415,16 +658,10 @@ struct SshSession {
     stderr_thread: Option<JoinHandle<()>>,
     next_id: u64,
     healthy: bool,
-    regions: BTreeMap<String, CachedRemoteRegion>,
+    regions: BTreeMap<String, RegionResponse>,
     runtime: Option<RuntimeVersion>,
 }
 
-#[derive(Clone)]
-struct CachedRemoteRegion {
-    snapshot: String,
-    graph: mindflow::model::GraphData,
-    version: ProjectVersion,
-}
 
 impl SshSession {
     fn connect(destination: &str) -> Result<Self, String> {
@@ -505,11 +742,7 @@ impl SshSession {
             OpenProjectResponse::Region { region } => {
                 self.regions.insert(
                     region.root.clone(),
-                    CachedRemoteRegion {
-                        snapshot: region.status.snapshot.id.clone(),
-                        graph: region.graph.clone(),
-                        version: region.version.clone(),
-                    },
+                    region.clone(),
                 );
             }
             OpenProjectResponse::Folder { root, .. } => {
@@ -832,6 +1065,184 @@ mod tests {
 
     use super::*;
 
+    fn inert_session() -> Arc<Mutex<SshSession>> {
+        Arc::new(Mutex::new(SshSession {
+            destination: "fixture".to_owned(),
+            child: None,
+            stdin: None,
+            stdout: None,
+            stderr_tail: Arc::new(Mutex::new(Vec::new())),
+            stderr_thread: None,
+            next_id: 1,
+            healthy: true,
+            regions: BTreeMap::new(),
+            runtime: None,
+        }))
+    }
+
+    #[test]
+    fn project_and_picker_sessions_are_owned_by_their_workspace_and_root() {
+        let sessions = SshSessionManager::default();
+        let access = SshProjectAccess {
+            destination: "fixture".to_owned(),
+            root: "/project".to_owned(),
+        };
+        let keys = [
+            SshSessionKey::new("main", "fixture", "/project"),
+            SshSessionKey::new("main", "fixture", "/other"),
+            SshSessionKey::new("workspace-2", "fixture", "/project"),
+            SshSessionKey::new("main", "fixture", ""),
+            SshSessionKey::new("workspace-2", "fixture", ""),
+        ];
+        let weak = keys
+            .iter()
+            .map(|key| {
+                let session = inert_session();
+                let weak = Arc::downgrade(&session);
+                sessions
+                    .sessions
+                    .lock()
+                    .unwrap()
+                    .insert(key.clone(), session);
+                weak
+            })
+            .collect::<Vec<_>>();
+        sessions.release_picker("main").unwrap();
+        assert!(weak[3].upgrade().is_none());
+        assert!(weak[4].upgrade().is_some());
+        sessions.release_project("main", &access).unwrap();
+        assert!(weak[0].upgrade().is_none());
+        assert!(weak[1].upgrade().is_some());
+        assert!(weak[2].upgrade().is_some());
+        sessions.release_workspace("main").unwrap();
+        assert!(weak[1].upgrade().is_none());
+        assert!(weak[2].upgrade().is_some());
+        sessions.release_workspace("workspace-2").unwrap();
+        assert!(weak.iter().all(|weak| weak.upgrade().is_none()));
+        assert!(sessions.sessions.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn stale_session_failure_cannot_remove_another_root_or_replacement() {
+        let sessions = SshSessionManager::default();
+        let key = SshSessionKey::new("main", "fixture", "/project");
+        let failed = inert_session();
+        let replacement = inert_session();
+        let peer_key = SshSessionKey::new("workspace-2", "fixture", "/project");
+        sessions
+            .sessions
+            .lock()
+            .unwrap()
+            .insert(key.clone(), Arc::clone(&replacement));
+        sessions
+            .sessions
+            .lock()
+            .unwrap()
+            .insert(peer_key.clone(), inert_session());
+        sessions.remove_if_current(&key, &failed);
+        assert!(Arc::ptr_eq(
+            sessions.sessions.lock().unwrap().get(&key).unwrap(),
+            &replacement
+        ));
+        sessions.remove_if_current(&key, &replacement);
+        assert!(!sessions.sessions.lock().unwrap().contains_key(&key));
+        assert!(sessions.sessions.lock().unwrap().contains_key(&peer_key));
+    }
+
+    #[test]
+    fn closed_connections_cannot_return_after_project_picker_or_workspace_cleanup() {
+        let sessions = SshSessionManager::default();
+        let access = SshProjectAccess {
+            destination: "fixture".to_owned(),
+            root: "/project".to_owned(),
+        };
+        for kind in ["project", "picker", "workspace"] {
+            let root = if kind == "picker" { "" } else { &access.root };
+            let key = SshSessionKey::new("main", &access.destination, root);
+            let ticket = sessions.connection_ticket(&key).unwrap();
+            match kind {
+                "picker" => sessions.release_picker("main").unwrap(),
+                "workspace" => sessions.release_workspace("main").unwrap(),
+                _ => sessions.release_project("main", &access).unwrap(),
+            }
+            assert!(sessions
+                .finish_connection(key, &ticket, Ok(inert_session()))
+                .is_err());
+            assert!(sessions.sessions.lock().unwrap().is_empty());
+            assert!(sessions.pending.lock().unwrap().is_empty());
+        }
+        let key = SshSessionKey::new("main", &access.destination, &access.root);
+        let old = sessions.connection_ticket(&key).unwrap();
+        let current = sessions.connection_ticket(&key).unwrap();
+        assert!(sessions
+            .finish_connection(key.clone(), &old, Ok(inert_session()))
+            .is_err());
+        sessions
+            .finish_connection(key, &current, Ok(inert_session()))
+            .unwrap();
+        assert!(sessions.pending.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn duplicate_remote_open_reuses_only_its_own_cached_observation() {
+        let fixture = std::env::temp_dir().join(format!(
+            "mindflow-ssh-cache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&fixture).unwrap();
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(&fixture)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+        let project = mindflow::Project::initialize(fixture.clone()).unwrap();
+        let first = mindflow::human::region_response(&project).unwrap();
+        let root = first.root.clone();
+        let first_id = first.status.snapshot.id.clone();
+        let manifest = fixture.join(mindflow::project::MANIFEST_FILENAME);
+        fs::write(
+            &manifest,
+            format!(
+                "{}\n# A new observation\n",
+                fs::read_to_string(&manifest).unwrap()
+            ),
+        )
+        .unwrap();
+        let second =
+            mindflow::human::region_response(&mindflow::Project::load(fixture.clone()).unwrap())
+                .unwrap();
+        let second_id = second.status.snapshot.id.clone();
+        assert_ne!(first_id, second_id);
+        let sessions = SshSessionManager::default();
+        for (owner, region) in [("main", first), ("workspace-2", second)] {
+            let session = inert_session();
+            session.lock().unwrap().regions.insert(root.clone(), region);
+            sessions
+                .sessions
+                .lock()
+                .unwrap()
+                .insert(SshSessionKey::new(owner, "fixture", &root), session);
+        }
+        // Inert transports cannot dispatch: this succeeds only by reusing the
+        // exact observation that the existing tab already displays.
+        for (owner, expected) in [("main", first_id), ("workspace-2", second_id)] {
+            match sessions.open_project(owner, "fixture", &root).unwrap() {
+                OpenProjectResponse::Region { region } => {
+                    assert_eq!(region.status.snapshot.id, expected);
+                    assert_eq!(region.root, encode_access_root("fixture", &root).unwrap());
+                }
+                other => panic!("expected cached Region, got {other:?}"),
+            }
+        }
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
     #[test]
     fn destination_grammar_rejects_shell_and_option_surfaces() {
         for destination in ["server", "user@server", "host:2222", "[::1]"] {
@@ -877,26 +1288,26 @@ mod tests {
         let destination = env::var("MINDFLOW_SSH_TEST_DESTINATION").unwrap();
         let path = env::var("MINDFLOW_SSH_TEST_PATH").unwrap();
         let sessions = SshSessionManager::default();
-        let home = sessions.browse_directory(&destination, "~", true).unwrap();
+        let home = sessions.browse_directory("main", &destination, "~", true).unwrap();
         assert!(Path::new(&home.path).is_absolute());
         assert!(home.entries.iter().any(|entry| entry.name == "coding"));
-        let response = sessions.open_project(&destination, &path).unwrap();
+        let response = sessions.open_project("main", &destination, &path).unwrap();
         let (qualified_root, retained_snapshot) = match response {
             OpenProjectResponse::Region { region } => (region.root, region.status.snapshot.id),
             other => panic!("expected a remote region, received {other:?}"),
         };
         let access = parse_access_root(&qualified_root).unwrap().unwrap();
-        let directory = sessions.list_directory(&access, "").unwrap();
+        let directory = sessions.list_directory("main", &access, "").unwrap();
         assert!(directory
             .entries
             .iter()
             .any(|entry| entry.path == "governance"));
         assert!(sessions
-            .reader_snapshot(&access, "missing-reader-file.md", Some(&retained_snapshot),)
+            .reader_snapshot("main", &access, "missing-reader-file.md", Some(&retained_snapshot),)
             .is_err());
-        assert!(sessions.list_directory(&access, "").is_ok());
+        assert!(sessions.list_directory("main", &access, "").is_ok());
         let reader = sessions
-            .reader_snapshot(
+            .reader_snapshot("main",
                 &access,
                 "governance/Documentation.md",
                 Some(&retained_snapshot),
@@ -908,10 +1319,10 @@ mod tests {
             .starts_with("# Repository Documentation System"));
         assert_eq!(reader.root, qualified_root);
 
-        sessions.terminate_session_for_test(&destination);
-        assert!(sessions.list_directory(&access, "").is_err());
+        sessions.terminate_session_for_test("main", &access);
+        assert!(sessions.list_directory("main", &access, "").is_err());
         assert!(matches!(
-            sessions.refresh_project(&access, true).unwrap(),
+            sessions.refresh_project("main", &access, true).unwrap(),
             OpenProjectResponse::Region { .. }
         ));
     }

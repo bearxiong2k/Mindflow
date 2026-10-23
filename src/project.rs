@@ -270,7 +270,7 @@ struct GitObjectInfo {
     id: String,
     kind: String,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusData {
     pub root: String,
     pub revision: String,
@@ -731,10 +731,13 @@ impl Project {
             .collect()
     }
 
-    pub fn timeline_commits(&self) -> Vec<TimelineCommit> {
+    pub fn timeline_commits(&self) -> Result<Vec<TimelineCommit>> {
+        let Some(head) = self.snapshot.head.as_deref() else {
+            return Ok(Vec::new());
+        };
         let commits: Vec<String> = git_output(
             &self.root,
-            &["rev-list", "--first-parent", "--reverse", "HEAD"],
+            &["rev-list", "--first-parent", "--reverse", head],
         )
         .map(|output| {
             output
@@ -744,12 +747,12 @@ impl Project {
                 })
                 .map(str::to_owned)
                 .collect()
-        })
-        .unwrap_or_default();
+        })?;
         if commits.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
+        let commit_set: BTreeSet<&str> = commits.iter().map(String::as_str).collect();
         let boundary_updates = (|| -> Result<BTreeMap<String, Option<usize>>> {
             let manifest_changes = git_output(
                 &self.root,
@@ -758,14 +761,14 @@ impl Project {
                     "--first-parent",
                     "--reverse",
                     "--format=%H",
-                    "HEAD",
+                    head,
                     "--",
                     MANIFEST_FILENAME,
                 ],
             )?;
             let manifest_change_set = manifest_changes
                 .lines()
-                .filter(|commit| commits.iter().any(|candidate| candidate == commit))
+                .filter(|commit| commit_set.contains(commit))
                 .map(str::to_owned)
                 .collect::<BTreeSet<_>>();
             let manifest_change_commits = commits
@@ -799,7 +802,7 @@ impl Project {
         .ok();
 
         let mut event_boundary = boundary_updates.as_ref().map(|_| Some(0)).unwrap_or(None);
-        commits
+        Ok(commits
             .into_iter()
             .map(|commit| {
                 if let Some(boundary) = boundary_updates
@@ -813,7 +816,7 @@ impl Project {
                     event_boundary,
                 }
             })
-            .collect()
+            .collect())
     }
 
     pub fn form_historical_selection(
@@ -2944,9 +2947,16 @@ mod tests {
             [None]
         );
 
-        let project = Project::load(root).unwrap();
+        let project = Project::load(root.clone()).unwrap();
         assert!(project.status().valid);
-        let timeline = project.timeline_commits();
+        // A later checkout/rewind must not mix live HEAD with retained Events.
+        git_output(&root, &["update-ref", "HEAD", &commits[0]]).unwrap();
+        // Opening a Region keeps complete authored Events and Anchors but does
+        // not enumerate history. The separate request remains lossless at scale.
+        let region = crate::human::region_response(&project).unwrap();
+        assert!(!region.timeline_history_loaded);
+        assert!(region.timeline_commits.is_empty());
+        let timeline = project.timeline_commits().unwrap();
         assert_eq!(timeline.len(), HISTORY_SIZE);
         for (entry, commit) in timeline.iter().zip(&commits) {
             assert_eq!(&entry.commit, commit);

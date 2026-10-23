@@ -2,7 +2,25 @@
 
 This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
-laboratory whose public release is deferred.
+private laboratory; this repository receives reviewed source releases.
+
+## [2026.10.24](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.24) — GUI integration prerelease
+
+- Loads Git history only when Timeline opens, with loading, failure, and retry
+  states. Groups dense commit markers while preserving exact commit selection
+  through bounded pages and a commit-number field.
+- Reuses graph geometry and bounded render caches, prioritizes foreground
+  navigation, and cancels superseded queued layouts.
+- Keeps Reader, Timeline, and measurement observations independent across
+  workspace windows, including when another window refreshes or closes.
+- Wraps graph names, relationships, and Reader prose at natural boundaries,
+  preserving long filenames, Unicode graphemes, and table-header words.
+- Groups entry line counts with their growth charts and removes excess space
+  so more of the graph fits on screen.
+- Keeps project format `2026-10-20` and the optional Structuralist setup route.
+  Source and standalone skill archives include checksums; no prebuilt app is
+  included. Dense initial layouts and explicit long-history requests remain
+  performance limits, and two-host SSH deployment remains unqualified.
 
 ## [2026.10.20](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.20) — Source beta prerelease
 

@@ -30,6 +30,10 @@ fn versions_are_root_independent_and_distinguish_release_format_and_protocol() {
     let handoff = include_str!("../src/update-handoff.md");
     assert!(handoff.contains(env!("CARGO_PKG_VERSION")));
     assert!(handoff.contains(mindflow::project::CURRENT_FORMAT));
+    assert!(handoff.contains(&format!(
+        "bridge protocol `{}`",
+        mindflow::bridge::PROTOCOL_VERSION
+    )));
 }
 
 #[test]
