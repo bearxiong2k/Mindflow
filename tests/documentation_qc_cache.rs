@@ -359,3 +359,39 @@ fn qc_cache_uses_each_worktrees_git_directory_and_captured_working_content() {
     assert_eq!(traced_qc(&f, 5).0, original);
     assert_eq!(traced_qc(&linked, 5).0, changed);
 }
+
+#[test]
+fn qc_cache_does_not_conceal_missing_historical_root_or_ancestor_trees() {
+    use mindflow::documentation_qc::observe;
+    for tree_spec in ["HEAD^^{tree}", "HEAD^:docs"] {
+        let f = Fixture::base();
+        qc_commit(&f, "baseline");
+        f.write("docs/a.md", "changed\n");
+        qc_commit(&f, "current");
+        let project = f.valid();
+        observe(&project, 5).unwrap();
+        let tree = git(&f.0, &["rev-parse", tree_spec]);
+        fs::remove_file(f.0.join(".git/objects").join(&tree[..2]).join(&tree[2..])).unwrap();
+        let warm_error = observe(&project, 5).unwrap_err().to_string();
+        fs::remove_file(qc_cache_file(&f)).unwrap();
+        let cold_error = observe(&project, 5).unwrap_err().to_string();
+        assert!(
+            warm_error.contains("QC Git inspection failed"),
+            "{warm_error}"
+        );
+        assert_eq!(warm_error, cold_error);
+    }
+}
+
+#[test]
+fn qc_tree_inspection_still_rejects_a_historical_directory_at_a_document_path() {
+    use mindflow::documentation_qc::observe;
+    let f = Fixture::base();
+    fs::remove_file(f.0.join("docs/a.md")).unwrap();
+    f.write("docs/a.md/child.md", "historical folder content\n");
+    qc_commit(&f, "historical directory");
+    fs::remove_dir_all(f.0.join("docs/a.md")).unwrap();
+    f.write("docs/a.md", "current document\n");
+    let error = observe(&f.valid(), 5).unwrap_err().to_string();
+    assert!(error.contains("not a regular document"), "{error}");
+}

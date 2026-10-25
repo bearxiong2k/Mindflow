@@ -16,7 +16,8 @@ private laboratory; this repository receives reviewed source releases.
 - Refresh revalidates the captured project inputs. Working edits, changed
   registrations, and Git replacements are reflected correctly; unavailable or
   damaged cache files fall back to ordinary measurement. Workspace snapshots
-  remain independent.
+  remain independent. Cached reports still reject missing historical Git
+  objects instead of concealing unavailable history.
 - Adds portable regression coverage for process reuse, cache replacement,
   corruption, concurrent requests, retained snapshots, and linked worktrees.
 - Keeps format `2026-10-20`, the Structuralist installation route, and source-only

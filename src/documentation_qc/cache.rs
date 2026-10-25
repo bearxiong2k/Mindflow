@@ -10,7 +10,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 const MAX_CACHE_BYTES: u64 = 8 * 1024 * 1024;
 
 #[derive(Default, Serialize, Deserialize)]
@@ -30,6 +30,7 @@ pub(super) struct Measurements {
 #[serde(deny_unknown_fields)]
 pub(super) struct Commit {
     pub objects: BTreeMap<String, String>,
+    pub trees: BTreeSet<String>,
     pub previous: Option<String>,
     pub changes: BTreeMap<String, (usize, usize)>,
 }
@@ -192,8 +193,8 @@ impl Store {
 
 impl Measurements {
     /// A cache hit must not turn missing historical objects into available data.
-    /// Check cached blobs in one Git process, without reading prose. An object
-    /// from the preceding window may also be reused by a newly selected commit.
+    /// Check cached blobs and required trees in one process, without reading
+    /// prose. A newly selected commit may reuse an object from the prior window.
     pub fn verify_objects(&mut self, root: &Path) {
         if self.try_verify_objects(root).is_err() {
             self.commits.clear();
@@ -203,12 +204,24 @@ impl Measurements {
     }
 
     fn try_verify_objects(&self, root: &Path) -> Result<()> {
-        let objects: Vec<_> = self.blobs.keys().collect();
+        let mut objects: BTreeMap<String, (&str, Option<usize>)> = self
+            .blobs
+            .iter()
+            .map(|(object, blob)| (object.clone(), ("blob", Some(blob.sample.bytes))))
+            .collect();
+        if !self.paths.is_empty() {
+            for (commit, data) in &self.commits {
+                objects.insert(format!("{commit}^{{tree}}"), ("tree", None));
+                for tree in &data.trees {
+                    objects.insert(tree.clone(), ("tree", None));
+                }
+            }
+        }
         if objects.is_empty() {
             return Ok(());
         }
         let input = objects
-            .iter()
+            .keys()
             .map(|object| format!("{object}\n"))
             .collect::<String>();
         let mut child = Command::new("git")
@@ -238,14 +251,13 @@ impl Measurements {
             text.lines().count() == objects.len(),
             "incomplete QC object check"
         );
-        for (line, object) in text.lines().zip(objects) {
+        for (line, (object, (kind, bytes))) in text.lines().zip(objects) {
             let fields: Vec<_> = line.split_whitespace().collect();
-            let blob = self.blobs.get(object).context("missing cached QC blob")?;
             anyhow::ensure!(
                 fields.len() == 3
-                    && fields[0] == object
-                    && fields[1] == "blob"
-                    && fields[2].parse::<usize>()? == blob.sample.bytes,
+                    && (object.ends_with("^{tree}") || fields[0] == object)
+                    && fields[1] == kind
+                    && bytes.map_or(true, |expected| fields[2].parse::<usize>() == Ok(expected)),
                 "changed QC object"
             );
         }

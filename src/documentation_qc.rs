@@ -163,13 +163,15 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
                         &["rev-parse", "--show-prefix"],
                     )?)?);
                 }
+                let (objects, trees) = tree_objects(
+                    &project.root,
+                    prefix.as_deref().unwrap().trim_end_matches('\n'),
+                    commit,
+                    &paths,
+                )?;
                 cache::Commit {
-                    objects: tree_objects(
-                        &project.root,
-                        prefix.as_deref().unwrap().trim_end_matches('\n'),
-                        commit,
-                        &paths,
-                    )?,
+                    objects,
+                    trees,
                     ..cache::Commit::default()
                 }
             }
@@ -525,15 +527,18 @@ fn tree_objects(
     prefix: &str,
     commit: &str,
     paths: &[String],
-) -> Result<BTreeMap<String, String>> {
+) -> Result<(BTreeMap<String, String>, BTreeSet<String>)> {
     if paths.is_empty() {
-        return Ok(BTreeMap::new());
+        return Ok((BTreeMap::new(), BTreeSet::new()));
     }
-    let mut args = vec!["ls-tree", "-z", "--full-tree", commit, "--"];
+    // Include the traversed ancestor trees, even for paths absent at this
+    // commit, so warm observations still require the same available history.
+    let mut args = vec!["ls-tree", "-z", "-t", "--full-tree", commit, "--"];
     let tree_paths: Vec<_> = paths.iter().map(|path| format!("{prefix}{path}")).collect();
     args.extend(tree_paths.iter().map(String::as_str));
     let output = git(root, &args)?;
     let mut objects = BTreeMap::new();
+    let mut trees = BTreeSet::new();
     for record in output
         .split(|byte| *byte == 0)
         .filter(|record| !record.is_empty())
@@ -543,6 +548,18 @@ fn tree_objects(
             .split_once('\t')
             .context("Invalid QC Git tree record")?;
         let fields: Vec<_> = metadata.split_whitespace().collect();
+        if fields.len() == 3
+            && fields[0] == "040000"
+            && fields[1] == "tree"
+            && tree_paths.iter().any(|document| {
+                document
+                    .strip_prefix(path)
+                    .is_some_and(|suffix| suffix.starts_with('/'))
+            })
+        {
+            trees.insert(fields[2].into());
+            continue;
+        }
         if fields.len() != 3 || !matches!(fields[0], "100644" | "100755") || fields[1] != "blob" {
             bail!("QC path '{path}' at {commit} is not a regular document");
         }
@@ -557,7 +574,7 @@ fn tree_objects(
         }
         objects.insert(path.into(), fields[2].into());
     }
-    Ok(objects)
+    Ok((objects, trees))
 }
 
 fn numstat(output: &[u8]) -> Result<BTreeMap<String, (usize, usize)>> {

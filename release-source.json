@@ -2,8 +2,8 @@
   "format": 2,
   "release": "2026.10.25",
   "source_repository": "https://github.com/bearxiong2k/Mindflow-lab",
-  "source_revision": "bd004efec60813c32048073cb4978bd43873ebc8",
-  "source_tree": "5660dda0488f48655153f6deacd6ebe9c961bb69",
+  "source_revision": "169df9888dc283084ca02c93493b3916e04aaedd",
+  "source_tree": "085d023e808b518c9123ac7e62d7f82f2ca7fa4d",
   "promoted_files": ".mindflow-promoted-files",
   "components": {
     "core_cli": "2026.10.25",
