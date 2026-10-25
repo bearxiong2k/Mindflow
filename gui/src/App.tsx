@@ -28,6 +28,7 @@ import {
   presentReaderWindow,
   reconcileReaderWindows,
   refreshProject,
+  invalidateDocumentationQc,
   reloadProject,
   relaunchRegions,
   takePendingOpenRegions,
@@ -739,6 +740,7 @@ const RegionWorkspace = forwardRef<
       setFilesGeneration((current) => current + 1);
       if (activateSynchronizedBuild || response.region.root !== currentRoot ||
           response.region.status.snapshot.id !== snapshotId) {
+        invalidateDocumentationQc(currentRoot);
         acceptRegion(response.region, true);
       }
       setRegionError(undefined);

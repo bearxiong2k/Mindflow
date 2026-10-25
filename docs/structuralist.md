@@ -11,7 +11,7 @@ Core, CLI, and GUI work without it.
 
 ## Install the complete package
 
-The [2026.10.24 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.24) includes the complete package
+The [2026.10.25 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.25) includes the complete package
 in its source and offers a separate skill archive:
 
 ```text
@@ -46,7 +46,7 @@ pass the exact destination to the installer:
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
 
-For the separate skill archive, extract it and enter `structuralist-2026.10.24/`.
+For the separate skill archive, extract it and enter `structuralist-2026.10.25/`.
 Run the same `./distribution/install-structuralist.sh` and `--check` commands
 there. The archive includes its installer and license notices. For manual
 installation, copy its complete `skills/structuralist/` directory into your

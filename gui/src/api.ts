@@ -13,7 +13,8 @@ import type {
 } from "./types";
 import type { ReaderNavigationMode } from "./readerNavigation";
 import type { DesktopVersionInfo } from "./versionInfo";
-import { qcSameWindow, type DocumentationQc, type QcHistory, type QcWindow } from "./documentationQc";
+import type { DocumentationQc, QcHistory, QcWindow } from "./documentationQc";
+import { createDocumentationQcCache } from "./documentationQcCache";
 
 const timelineRequests = new Map<string, Promise<TimelineHistoryResponse>>();
 export function loadTimelineHistory(root: string, snapshot: string): Promise<TimelineHistoryResponse> {
@@ -36,15 +37,10 @@ export function loadTimelineHistory(root: string, snapshot: string): Promise<Tim
   return request;
 }
 
-const qcRequests = new Map<string, Promise<DocumentationQc>>();
-export function loadDocumentationQc(root: string, snapshot: string, window: QcWindow): Promise<DocumentationQc> {
-  const key = JSON.stringify([root, snapshot, window]);
-  const pending = qcRequests.get(key);
-  if (pending) return pending;
-  const request = requestDocumentationQc(root, snapshot, window).finally(() => { qcRequests.delete(key); });
-  qcRequests.set(key, request);
-  return request;
-}
+const qcCache = createDocumentationQcCache(requestDocumentationQc);
+export const loadDocumentationQc = qcCache.load;
+export const cachedDocumentationQc = qcCache.peek;
+export const invalidateDocumentationQc = qcCache.invalidate;
 async function requestDocumentationQc(root: string, snapshot: string, window: QcWindow): Promise<DocumentationQc> {
   const query = new URLSearchParams(window.kind === "recent"
     ? { commits: String(window.commits) } : { from: window.start, to: window.end });
@@ -54,10 +50,6 @@ async function requestDocumentationQc(root: string, snapshot: string, window: Qc
         return response.json();
       })
     : await invoke<DocumentationQc>("documentation_qc", { root, snapshot, window });
-  if (report.root !== root || report.snapshot.id !== snapshot
-    || report.schema !== "mindflow-documentation-qc/v2" || !qcSameWindow(report.window, window)) {
-    throw new Error("QC observation no longer matches this Region. Refresh the project and try again.");
-  }
   return report;
 }
 

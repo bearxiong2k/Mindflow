@@ -4,6 +4,25 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 private laboratory; this repository receives reviewed source releases.
 
+## [2026.10.25](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.25) — QC and volume caching prerelease
+
+- Reuses numeric documentation measurements across app and CLI sessions, so
+  unchanged Git history does not need repeated measurement. Each project keeps
+  one replaceable cache of the requested window, capped at 8 MiB, in local Git
+  state. It contains counts and source identities, not document prose.
+- Shares completed observations between QC and graph volume/growth displays.
+  Reopening a panel, toggling Volume, or choosing an already covered shorter
+  recent window avoids another measurement request and loading flash.
+- Refresh revalidates the captured project inputs. Working edits, changed
+  registrations, and Git replacements are reflected correctly; unavailable or
+  damaged cache files fall back to ordinary measurement. Workspace snapshots
+  remain independent.
+- Adds portable regression coverage for process reuse, cache replacement,
+  corruption, concurrent requests, retained snapshots, and linked worktrees.
+- Keeps format `2026-10-20`, the Structuralist installation route, and source-only
+  distribution. First measurements and dense initial graph layouts can still
+  take time; two-host SSH deployment remains unqualified.
+
 ## [2026.10.24](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.24) — GUI integration prerelease
 
 - Loads Git history only when Timeline opens, with loading, failure, and retry

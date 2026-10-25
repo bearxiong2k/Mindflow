@@ -81,6 +81,8 @@ gui/src/components/useTextBoxMeasurements.ts
 gui/src/documentationQc.css
 gui/src/documentationQc.test.mjs
 gui/src/documentationQc.ts
+gui/src/documentationQcCache.test.mjs
+gui/src/documentationQcCache.ts
 gui/src/graph.ts
 gui/src/inspection.ts
 gui/src/interactionGeometry.test.mjs
@@ -166,6 +168,7 @@ skills/structuralist/references/recipe.md
 src/bin/mindflow-observe.rs
 src/bridge.rs
 src/documentation_qc.rs
+src/documentation_qc/cache.rs
 src/human.rs
 src/lib.rs
 src/main.rs
@@ -179,5 +182,6 @@ src/topology.rs
 src/update-handoff.md
 src/version.rs
 src/yaml.rs
+tests/documentation_qc_cache.rs
 tests/observation.rs
 tests/update_handoff.rs

@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{project::SnapshotIdentity, Project};
 
+mod cache;
+
 pub const DEFAULT_COMMITS: usize = 30;
 pub const MAX_COMMITS: usize = 100;
 pub const MAX_RANGE_COMMITS: usize = 500;
@@ -125,6 +127,12 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
     }
     let shallow_history =
         git(&project.root, &["rev-parse", "--is-shallow-repository"])? == b"true\n";
+    let (store, mut measurements) = match cache::Store::open(&project.root, &paths) {
+        Some((store, measurements)) => (Some(store), measurements),
+        None => (None, cache::Measurements::default()),
+    };
+    measurements.verify_objects(&project.root);
+    measurements.snapshot = snapshot.id.clone();
     let mut entries: Vec<_> = paths
         .iter()
         .map(|path| QcEntry {
@@ -139,12 +147,39 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
             samples: Vec::new(),
         })
         .collect();
-    let mut blobs = BlobReader::new(&project.root)?;
+    let mut blobs = None;
+    let mut prefix = None;
+    let mut measured_objects = BTreeSet::new();
+    let mut history_bytes = 0usize;
     let mut head_objects = BTreeMap::new();
     for (index, point) in points.iter().enumerate() {
         let commit = point.commit.as_deref().unwrap();
-        let objects = tree_objects(&project.root, commit, &paths)?;
-        let changes = if index > 0 && !paths.is_empty() {
+        let mut cached = match measurements.commits.get(commit) {
+            Some(cached) => cached.clone(),
+            None => {
+                if prefix.is_none() {
+                    prefix = Some(String::from_utf8(git(
+                        &project.root,
+                        &["rev-parse", "--show-prefix"],
+                    )?)?);
+                }
+                cache::Commit {
+                    objects: tree_objects(
+                        &project.root,
+                        prefix.as_deref().unwrap().trim_end_matches('\n'),
+                        commit,
+                        &paths,
+                    )?,
+                    ..cache::Commit::default()
+                }
+            }
+        };
+        let previous = index
+            .checked_sub(1)
+            .and_then(|index| points[index].commit.as_deref());
+        if let Some(previous) =
+            previous.filter(|previous| cached.previous.as_deref() != Some(*previous))
+        {
             let mut args = vec![
                 "diff",
                 "--relative",
@@ -156,25 +191,50 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
                 "--text",
                 "--diff-algorithm=myers",
                 "--no-indent-heuristic",
-                points[index - 1].commit.as_deref().unwrap(),
+                previous,
                 commit,
                 "--",
             ];
             args.extend(paths.iter().map(String::as_str));
-            numstat(&git(&project.root, &args)?)?
-        } else {
-            BTreeMap::new()
-        };
-        for entry in &mut entries {
-            let content = objects
-                .get(&entry.path)
-                .map(|object| blobs.read(object))
-                .transpose()
-                .with_context(|| format!("cannot measure '{}' at {commit}", entry.path))?;
-            let change = (index > 0).then(|| changes.get(&entry.path).copied().unwrap_or_default());
-            entry.samples.push(measure(content, change));
+            cached.changes = if paths.is_empty() || cached.objects == head_objects {
+                BTreeMap::new()
+            } else {
+                numstat(&git(&project.root, &args)?)?
+            };
+            cached.previous = Some(previous.into());
         }
-        head_objects = objects;
+        for entry in &mut entries {
+            let mut sample = if let Some(object) = cached.objects.get(&entry.path) {
+                if !measurements.blobs.contains_key(object) {
+                    let content = read_blob(&mut blobs, &project.root, object)
+                        .with_context(|| format!("cannot measure '{}' at {commit}", entry.path))?;
+                    measurements.blobs.insert(
+                        object.clone(),
+                        cache::Blob {
+                            sha256: cache::digest(content.as_bytes()),
+                            sample: measure(Some(content), None),
+                        },
+                    );
+                }
+                let sample = measurements.blobs[object].sample.clone();
+                if measured_objects.insert(object.clone()) {
+                    history_bytes = history_bytes.saturating_add(sample.bytes);
+                    if sample.bytes > MAX_BLOB_BYTES || history_bytes > MAX_HISTORY_BYTES {
+                        bail!("QC history exceeds its 8 MiB per document or 128 MiB total limit; choose fewer commits");
+                    }
+                }
+                sample
+            } else {
+                QcSample::default()
+            };
+            let change =
+                previous.map(|_| cached.changes.get(&entry.path).copied().unwrap_or_default());
+            sample.added_lines = change.map(|value| value.0);
+            sample.deleted_lines = change.map(|value| value.1);
+            entry.samples.push(sample);
+        }
+        head_objects = cached.objects.clone();
+        measurements.commits.insert(commit.into(), cached);
     }
     if include_working_tree {
         let mut scratch = None;
@@ -186,12 +246,28 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
                     entry.path
                 );
             }
+            let sha256 = cache::digest(content.as_bytes());
+            let head_object = head_objects.get(&entry.path).cloned();
+            if let Some(cached) = measurements.working.get(&entry.path).filter(|cached| {
+                cached.sha256 == sha256
+                    && cached.head_object == head_object
+                    && cached.comparison == !points.is_empty()
+            }) {
+                entry.samples.push(cached.sample.clone());
+                continue;
+            }
             let changes = if points.is_empty() {
                 None
+            } else if head_object
+                .as_ref()
+                .and_then(|object| measurements.blobs.get(object))
+                .is_some_and(|blob| blob.sha256 == sha256)
+            {
+                Some((0, 0))
             } else {
-                let before = head_objects
-                    .get(&entry.path)
-                    .map(|object| blobs.read(object))
+                let before = head_object
+                    .as_ref()
+                    .map(|object| read_blob(&mut blobs, &project.root, object))
                     .transpose()?
                     .unwrap_or("");
                 Some(if before == content {
@@ -203,7 +279,17 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
                     scratch.as_ref().unwrap().changes(before, &content)?
                 })
             };
-            entry.samples.push(measure(Some(&content), changes));
+            let sample = measure(Some(&content), changes);
+            measurements.working.insert(
+                entry.path.clone(),
+                cache::Working {
+                    sha256,
+                    head_object,
+                    comparison: !points.is_empty(),
+                    sample: sample.clone(),
+                },
+            );
+            entry.samples.push(sample);
         }
         points.push(QcPoint {
             kind: "working-tree".into(),
@@ -257,6 +343,10 @@ pub fn observe_window(project: &Project, window: QcWindow) -> Result<Documentati
         }
     }));
     entries.sort_by(|left, right| left.path.cmp(&right.path));
+    measurements.retain_window(&points, &measured_objects);
+    if let Some(store) = store {
+        store.publish(measurements);
+    }
     Ok(DocumentationQc {
         schema: "mindflow-documentation-qc/v2".into(),
         root: project.root.display().to_string(),
@@ -430,12 +520,15 @@ fn history_page(
     Ok((points, truncated))
 }
 
-fn tree_objects(root: &Path, commit: &str, paths: &[String]) -> Result<BTreeMap<String, String>> {
+fn tree_objects(
+    root: &Path,
+    prefix: &str,
+    commit: &str,
+    paths: &[String],
+) -> Result<BTreeMap<String, String>> {
     if paths.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let prefix = String::from_utf8(git(root, &["rev-parse", "--show-prefix"])?)?;
-    let prefix = prefix.trim_end_matches('\n');
     let mut args = vec!["ls-tree", "-z", "--full-tree", commit, "--"];
     let tree_paths: Vec<_> = paths.iter().map(|path| format!("{prefix}{path}")).collect();
     args.extend(tree_paths.iter().map(String::as_str));
@@ -488,6 +581,13 @@ struct BlobReader {
     output: BufReader<ChildStdout>,
     cache: BTreeMap<String, String>,
     bytes: usize,
+}
+
+fn read_blob<'a>(reader: &'a mut Option<BlobReader>, root: &Path, object: &str) -> Result<&'a str> {
+    if reader.is_none() {
+        *reader = Some(BlobReader::new(root)?);
+    }
+    reader.as_mut().unwrap().read(object)
 }
 
 impl BlobReader {

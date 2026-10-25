@@ -1,7 +1,7 @@
 # CLI
 
 The CLI reconstructs one project-owned Region from ordinary files, its manifest,
-and Git. Commands below describe source release `2026.10.24`. Use
+and Git. Commands below describe source release `2026.10.25`. Use
 `mindflow --help` and each subcommand's `--help` for exact options.
 
 ## Select a project and inspect it
@@ -111,6 +111,11 @@ QC measures the current registered Markdown cohort across Git history. Its
 counts describe volume and change, not quality, completion, or a historical
 Region. Use `qc --help` for an exact commit range; missing comparison remains
 unknown.
+
+Repeated observations reuse numeric measurements in local Git state. The cache
+retains only the requested window for the current document cohort, is capped at
+8 MiB per project, and contains no document prose. Changed working content and
+Git inputs are revalidated; cache removal or failure causes recomputation.
 
 ## Output and failures
 

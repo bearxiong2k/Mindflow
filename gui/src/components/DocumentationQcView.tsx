@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadDocumentationQc } from "../api";
+import { cachedDocumentationQc, loadDocumentationQc } from "../api";
 import { qcRows, qcSummary, qcHasWorkingTree, type DocumentationQc, type QcEntry, type QcWindow } from "../documentationQc";
 import { CloseIcon } from "./Icons";
 import { QcWindowSelector } from "./QcWindowSelector";
@@ -91,8 +91,8 @@ export function DocumentationQcView({ root, snapshot, generation, onClose, onRea
     );
     return () => { disposed = true; };
   }, [root, snapshot, window, key]);
-  const report = request?.key === key ? request.report : undefined;
-  const error = request?.key === key ? request.error : undefined;
+  const report = cachedDocumentationQc(root, snapshot, window) ?? (request?.key === key ? request.report : undefined);
+  const error = !report && request?.key === key ? request.error : undefined;
   const folders = useMemo(() => report?.entries.filter((entry) => entry.kind === "directory") ?? [], [report]);
   const activeScope = folders.some((entry) => entry.path === scope) ? scope : "";
   const entry = report?.entries.find((value) => value.path === selected)

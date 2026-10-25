@@ -65,6 +65,14 @@ document should split. Unknown historical comparison remains unknown.
 The **Volume** control groups each entry's line count with its compact growth
 chart. Hover or keyboard focus reveals the exact values and comparison baseline.
 
+QC and Volume share completed measurements for the same project observation.
+Reopening QC, toggling Volume, and selecting a covered shorter recent window
+reuse those results. A small local numeric cache also speeds later app and CLI
+sessions. It retains the requested window and current document cohort, replaces
+obsolete measurements, and stores no document prose. No setup is required.
+Refresh revalidates the inputs and reuses measurements that still match.
+A missing or damaged cache is rebuilt through ordinary measurement.
+
 Refresh reloads project content. If a newly synchronized local build is ready,
 explicit Refresh can activate it and reconstruct workspace tabs. Passive
 window-focus checks do not activate another build. The version inspector helps
@@ -83,6 +91,8 @@ has areas that need broader testing:
 
 - Opening Timeline still processes the complete first-parent Git history.
   Very large histories can increase that request's time and memory use.
+- The first QC/Volume request or a larger uncached history window still needs
+  measurement. Caching reduces repeated work; it does not remove history limits.
 - First-time layout of dense graphs can still be slow. Repeated navigation
   reuses bounded caches and superseded queued layouts are cancelled.
 - Dense diagrams can exceed rendering limits, including the 500-edge budget.
