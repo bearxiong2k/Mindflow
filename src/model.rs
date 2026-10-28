@@ -8,6 +8,8 @@ pub struct Manifest {
     #[serde(rename = "adopted-release", default, skip_serializing_if = "Option::is_none")]
     pub adopted_release: Option<String>,
     pub components: BTreeMap<String, ComponentRegistration>,
+    #[serde(rename = "historical-components", default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub historical_components: BTreeMap<String, HistoricalComponentDefinition>,
     #[serde(rename = "relationship-types", default)]
     pub relationship_types: BTreeMap<String, RelationshipTypeDefinition>,
     #[serde(default)]
@@ -18,8 +20,6 @@ pub struct Manifest {
     pub opening: OpeningDefinition,
     #[serde(default)]
     pub evolve: EvolveDefinition,
-    #[serde(rename = "historical-components", default)]
-    pub historical_components: BTreeMap<String, HistoricalComponentDefinition>,
     #[serde(default)]
     pub anchors: BTreeMap<String, AnchorDefinition>,
 }
@@ -85,11 +85,41 @@ pub struct AnchorConnection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvolveEvent {
-    pub name: String,
+    pub component: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opening: Option<OpeningTransition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpeningTransition {
+    #[serde(default)]
+    pub predecessors: Vec<String>,
+    #[serde(default)]
+    pub successors: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoricalComponentDefinition {
+    pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    pub predecessors: Vec<String>,
-    pub successors: Vec<String>,
+}
+
+/// Exact document handle and authored grouping in one captured Region.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EventView {
+    pub component: String,
+    pub name: String,
+    pub file: String,
+    pub content: crate::project::ContentHandle,
+    pub children: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opening: Option<OpeningTransition>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -106,13 +136,6 @@ pub struct EvolveDefinition {
     pub events: Vec<EvolveEvent>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct HistoricalComponentDefinition {
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RelationshipDirection {
@@ -186,7 +209,7 @@ pub struct GraphData {
     pub anchor_connection_types: BTreeMap<String, AnchorConnectionTypeDefinition>,
     pub documents: Vec<crate::project::DocumentHandle>,
     pub historical_components: BTreeMap<String, HistoricalComponentDefinition>,
-    pub events: Vec<EvolveEvent>,
+    pub events: Vec<EventView>,
     pub anchors: BTreeMap<String, AnchorView>,
 }
 

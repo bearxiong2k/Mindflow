@@ -38,19 +38,34 @@ separate project model.
 
 ## Evolve: how is meaningful change revisited?
 
-An **Event** is an authored junction with ordered predecessors and successors.
-It can open, carry, branch, merge, or end selected intent. Events are not Git
-commits, file lifecycle labels, or automatically inferred activity.
+An **Event** is an authored development in the project's understanding, kept in
+an ordinary registered Markdown file. It can carry discussion, evidence, an
+unresolved possibility, or a decision. Its title follows the filename. It needs
+no date, commit, final outcome, or change to Opening.
 
-Replaying Events from an empty selection must reach the current Opening,
-including its order. Historical component records preserve the identity of
-participants that no longer have current registrations; they do not register
-missing files again.
+An Event may summarize an ordered list of finer Events. These form a forest:
+each child has one parent at most, and groups cannot be cyclic. The grouping
+expresses a reading structure; it does not change filesystem hierarchy or give
+historical reasoning the authority of a current design owner. Authors may
+revise or regroup the account while Git preserves earlier bytes.
+
+Optional `opening` transitions record how selected files continue, branch,
+merge, or leave the historical flow. The first predecessor reference may carry
+a concern in from before the selected account. Later transitions must be
+consistent with that flow. Historical component records retain participant
+identities that no longer have current registrations without registering
+missing files again. The recorded end and current `opening.files` are independent.
+
+Folding a summary composes its complete subtree's file transitions. Expanding
+it reveals both finer discussions and detailed lifelines. Folding, focus, and
+zoom are disposable GUI presentation; files and manifest records carry the
+shared account. Author them with ordinary editors or an explicitly instructed
+agent. The GUI reads and navigates them.
 
 An **Anchor** combines a present interpretive document with an exact Git commit
 and explicit historical connections. Its current prose can develop while its
-selected evidence stays fixed. Anchors do not participate in Event replay and
-are separate from Opening.
+selected evidence stays fixed. Anchors do not participate in the recorded
+Opening flow and are separate from Opening.
 
 A **historical selection** is one explicit request with a concern, exact Git
 sources, selected Anchors, and optional instructions. It reads only those
@@ -66,8 +81,8 @@ Generated diagrams, selections, measurements, layout, and caches are disposable
 views. They cannot become a second source of accepted meaning.
 
 Invalid state is refused rather than silently reduced to a smaller valid
-Region. Validation checks bindings, relationships, replay, and other structural
-constraints; it cannot prove that a document is true or that a proposed change
+Region. Validation checks bindings, relationships, Event grouping and
+transitions, and other structural constraints; it cannot prove that a document is true or that a proposed change
 is wise. Code and other formal artifacts keep their ordinary tools and
 validators.
 

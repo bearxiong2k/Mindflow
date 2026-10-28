@@ -1,706 +1,566 @@
-import { timelineIdentitiesForPaths } from "../types.ts";
-import { HelpOnly } from "./InterfaceHelp";
 import {
-  createContext,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
+  type CSSProperties, type PointerEvent,
 } from "react";
-
+import { loadDocument, loadProjectImage } from "../api";
 import {
-  buildTimelinePresentationFromTopology,
-  buildTimelinePresentationTopology,
-  createTimelineSelectionResolver,
-  timelineCanvasHeight,
-  timelineCanvasWidth,
-  timelineEventLogEntries,
-  timelineEventMarkerLabel,
-  timelineFoldRangeKey,
-  timelineFocusedIntentSpans,
-  timelineFocusedRetirements,
-  timelineIntentSpanAtBoundary,
-  timelineRetirementsCrossed,
-  timelineLaneHitRegion,
-  resizeTimelineEntryRail,
-  TIMELINE_COLUMN_WIDTH,
-  TIMELINE_ENTRY_RAIL_DEFAULT_WIDTH,
-  TIMELINE_HORIZONTAL_PADDING,
-  TIMELINE_JUNCTION_GAP,
-  TIMELINE_LANE_GAP,
-  TIMELINE_TOP_PADDING,
-  type TimelineCrossedRetirement,
-  type TimelineEventMarker,
-  type TimelineFoldRange,
-  type TimelineIntentConnector,
-  type TimelineIntentSpan,
-  type TimelinePresentation,
-  type TimelineSelectionTarget,
-  type TimelineSelectionTrace,
-} from "../openingPresentation";
-import { relationshipStyle } from "../graph";
-import {
-  readerNavigationMode,
-  type ReaderDocumentActivation,
-  type ReaderNavigationMode,
-} from "../readerNavigation";
-import {
-  centeredTimelineScrollLeft,
-  resizeTimelinePanels,
-  timelineAnchorPosition,
-  timelineCommitTickPositions,
-  timelineCommitTickGroups,
-  timelineCommitPage,
-  timelineFocusedEventBoundaryAtCanvasOrigin,
-  timelineLeadingScrollInset,
-  timelineScrollLeftForLeadingInset,
-  timelinePanelClientToLocalScale,
-  timelinePanelDragMovement,
-  timelinePanelLocalLength,
-  timelineIntentOpensReader,
-  timelineReorderValue,
-  timelineRetirementMotionPhaseAt,
-  TIMELINE_REORDER_DURATION_MS,
-  TIMELINE_RETIREMENT_FADE_DURATION_MS,
-  TIMELINE_RETIREMENT_HOLD_DURATION_MS,
-  TIMELINE_RETIREMENT_MOVE_DURATION_MS,
-  TIMELINE_RETIREMENT_TOTAL_DURATION_MS,
-  type TimelineAnchorPosition,
-  type TimelineCommitTickPosition,
-  type TimelineIntentActivationSurface,
-  type TimelinePanelBoundary,
-  type TimelinePanelLayout,
-  type TimelinePanelSizes,
-} from "../timelineInteraction";
-import {
-  buildTimelineSelectionOverlay,
-  timelineSelectionTargetKey,
-} from "../timelineSelectionOverlay";
-import type {
-  AnchorDefinition,
-  AnchorTimelineSlice,
-  GraphData,
-  TimelineCommit,
-} from "../types";
+  eventRows, visibleEventSelection, evolveInspectorHeight, DEFAULT_EVOLVE_INSPECTOR_HEIGHT,
+  timelineCommitPage, type EventPoint,
+} from "../eventTimeline";
+import { buildOpeningTimeline, projectOpeningTimeline, openingFocusBoundary, openingTrace, openingEvidenceBoundaries, FILE_LANE_HEIGHT, type OpeningTraceTarget } from "../openingTimeline";
+import { DEFAULT_EVOLVE_RAIL_WIDTH, resizeEvolveRail, timelineAnchorPosition, timelineCommitTickPositions, timelineCommitTickGroups, centeredTimelineScrollLeft, timelineRenderWindow, TIMELINE_RENDER_TILE } from "../timelineInteraction";
+import type { AnchorTimelineSlice, GraphData, Opening, TimelineCommit } from "../types";
+import { readerNavigationMode, type ReaderNavigationMode } from "../readerNavigation";
+import { ReaderMarkdown, ReaderImageLoaderContext } from "./DocumentInspector";
+import { CloseIcon, ChevronIcon, AnchorIcon, LayersIcon } from "./Icons";
+import { HelpOnly } from "./InterfaceHelp";
+import { useTimelineRailMotion, type RetiringOpeningFile } from "./useTimelineRailMotion";
 import { WorkspaceBanner } from "./WorkspaceBanner";
-import { CloseIcon } from "./Icons";
+import { OpeningTimelineCanvas } from "./OpeningTimelineCanvas";
+import { EventNavigator } from "./EventNavigator";
+import { createTimelineScrollSync } from "../timelineScroll";
+import { eventNavigatorLens, eventLensScrollLeft, eventLensSelectionLeft } from "../eventNavigatorLens";
+import { EVENT_LAYERS_HEIGHT } from "../eventLayers";
+import type { EventLensHandle } from "./EventLens";
 
-interface TimelineViewProps {
+interface Props {
+  root: string;
+  snapshot: string;
   graph: GraphData;
+  opening: Opening;
+  expandedEvents: string[];
+  onExpandedEventsChange: (ids: string[]) => void;
+  railWidth: number;
+  onRailWidthChange: (width: number) => void;
+  inspectorHeight: number;
+  onInspectorHeightChange: (height: number) => void;
   anchorTimeline: AnchorTimelineSlice[];
   commits: TimelineCommit[];
-  historyLoading?: boolean;
+  historyLoading: boolean;
   historyError?: string;
-  onRetryHistory?: () => void;
-  panelLayout: TimelinePanelLayout;
-  foldRanges: TimelineFoldRange[];
-  foldSelection: {
-    active: boolean;
-    firstEndpoint?: TimelineFoldRange;
-  };
-  selectedFoldRange?: TimelineFoldRange;
-  protectedEventBoundaries: number[];
-  foldNotice?: string;
-  onPanelLayoutChange: (layout: TimelinePanelLayout) => void;
-  onFoldEndpoint: (endpoint: TimelineFoldRange) => void;
-  onSelectedFoldRangeChange: (range: TimelineFoldRange | undefined) => void;
-  onSelect: ReaderDocumentActivation;
+  onRetryHistory: () => void;
+  onSelect: (path: string, mode?: ReaderNavigationMode, fragment?: string) => void;
   onClose: () => void;
 }
 
-interface TimelineAnchorEntry {
-  name: string;
-  definition: AnchorDefinition;
-  slice?: AnchorTimelineSlice;
-}
+type EvidenceSelection = {kind: "git"} | {kind: "anchor"; name: string} | {kind: "commit"; commit: string} | {kind: "file"; component: string; interval?: string};
 
-function timelineAnchorEntryKey(name: string) {
-  return `timeline-anchor-entry:${name}`;
-}
-
-function timelineDimensions(columnCount: number, laneCount: number) {
-  return {
-    width: timelineCanvasWidth(columnCount, 0),
-    height: timelineCanvasHeight(laneCount),
-  };
-}
-
-function timelineXForColumn(column: number) {
-  return TIMELINE_HORIZONTAL_PADDING + column * TIMELINE_COLUMN_WIDTH;
-}
-
-function timelineYForLane(lane: number) {
-  return TIMELINE_TOP_PADDING + lane * TIMELINE_LANE_GAP;
-}
-
-interface TimelineRailResizeInteraction {
-  pointerId: number;
-  captureTarget: HTMLButtonElement;
-  startClientX: number;
-  startWidth: number;
-  availableWidth: number;
-}
-
-interface TimelinePanelResizeInteraction {
-  pointerId: number;
-  captureTarget: HTMLButtonElement;
-  boundary: TimelinePanelBoundary;
-  startClientY: number;
-  clientToLocalY: number;
-  startSizes: TimelinePanelSizes;
-  latestSizes: TimelinePanelSizes;
-  engaged: boolean;
-}
-
-const TimelineReorderStartedAtContext = createContext<number | undefined>(
-  undefined,
-);
-
-function useTimelineReorderAnimation(
-  targetValues: readonly number[],
-  applyValues: (values: readonly number[]) => void,
-  initialValues: readonly number[] = targetValues,
-) {
-  const coordinatedStartedAt = useContext(TimelineReorderStartedAtContext);
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  const renderedValuesRef = useRef<number[]>([...initialValues]);
-  const targetValuesRef = useRef(targetValues);
-  const applyValuesRef = useRef(applyValues);
-  targetValuesRef.current = targetValues;
-  applyValuesRef.current = applyValues;
-  const targetKey = targetValues.join(":");
-
-  useLayoutEffect(() => {
-    if (animationFrameRef.current !== undefined) {
-      window.cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = undefined;
+export function TimelineView({root, snapshot, graph, opening, expandedEvents, onExpandedEventsChange,
+  railWidth, onRailWidthChange, inspectorHeight, onInspectorHeightChange, anchorTimeline, commits, historyLoading,
+  historyError, onRetryHistory, onSelect, onClose}: Props) {
+  const [selected, setSelected] = useState<string>();
+  const [evidence, setEvidence] = useState<EvidenceSelection | undefined>({kind: "git"});
+  const lastGitSelection = useRef<EvidenceSelection>({kind: "git"});
+  const gitActive = evidence?.kind === "git" || evidence?.kind === "anchor" || evidence?.kind === "commit";
+  const expanded = useMemo(() => new Set(expandedEvents), [expandedEvents]);
+  const rows = useMemo(() => eventRows(graph.events, expanded), [graph.events, expanded]);
+  const [viewport, setViewport] = useState({left: 0, top: 0, width: 900, height: 500});
+  const [historyPosition, setHistoryPosition] = useState(0);
+  const historyPositionRef = useRef(0);
+  const topology = useMemo(() => buildOpeningTimeline(graph, opening, expanded), [graph, opening, expanded]);
+  const focusedBoundary = openingFocusBoundary(topology, viewport.left + viewport.width - 16);
+  const layout = useMemo(() => projectOpeningTimeline(topology, focusedBoundary), [topology, focusedBoundary]);
+  const retiringFiles = useTimelineRailMotion(layout.files);
+  const canvasHeight = Math.max(layout.height, ...retiringFiles.map(file => file.y + FILE_LANE_HEIGHT));
+  const selection = useMemo(() => visibleEventSelection(rows, graph.events, selected), [rows, graph.events, selected]);
+  const point = selection ? layout.byId.get(selection) : undefined;
+  const anchor = evidence?.kind === "anchor" ? graph.anchors[evidence.name] : undefined;
+  const commit = evidence?.kind === "commit" ? commits.find(item => item.commit === evidence.commit)
+    : evidence?.kind === "git" ? commits.at(-1) : undefined;
+  const file = evidence?.kind === "file" ? layout.fileById.get(evidence.component) : undefined;
+  const event = gitActive || file || !selected ? undefined : point?.event;
+  const workspace = useRef<HTMLElement>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  const eventStrip = useRef<HTMLDivElement>(null);
+  const eventLens = useRef<EventLensHandle>(null);
+  const fileRail = useRef<HTMLDivElement>(null);
+  const [scrollSync] = useState(() => createTimelineScrollSync(viewport));
+  const lastViewport = useRef(viewport);
+  const scrollIdle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const focusAfterLayout = useRef(false);
+  const foldAnchor = useRef<string | undefined>(undefined);
+  const renderColumn = Math.floor(viewport.left / TIMELINE_RENDER_TILE);
+  const renderRow = Math.floor(viewport.top / TIMELINE_RENDER_TILE);
+  const renderWindow = useMemo(() => timelineRenderWindow({left: renderColumn * TIMELINE_RENDER_TILE,
+    top: renderRow * TIMELINE_RENDER_TILE, width: viewport.width, height: viewport.height}),
+    [renderColumn, renderRow, viewport.width, viewport.height]);
+  const shownFiles = useMemo(() => layout.files.filter(file => file.y >= viewport.top - FILE_LANE_HEIGHT && file.y <= viewport.top + viewport.height + FILE_LANE_HEIGHT), [layout, viewport.top, viewport.height]);
+  const [availableHeight, setAvailableHeight] = useState(600);
+  const [availableWidth, setAvailableWidth] = useState(1000);
+  const fittedRailWidth = resizeEvolveRail(railWidth, 0, availableWidth);
+  const railDrag = useRef<{pointerId: number; x: number; width: number; scale: number; current: number} | undefined>(undefined);
+  const [hover, setHover] = useState<OpeningTraceTarget>();
+  const selectedTraceTarget = useMemo<OpeningTraceTarget | undefined>(() => file && evidence?.kind === "file" ? evidence
+    : event ? {kind: "event", component: event.component} : undefined, [file, evidence, event]);
+  const selectedTrace = useMemo(() => openingTrace(topology, selectedTraceTarget), [topology, selectedTraceTarget]);
+  const hoverTrace = useMemo(() => openingTrace(topology, hover, true), [topology, hover]);
+  const hoveredEvent = hover?.kind === "event" ? layout.byId.get(hover.component) : undefined;
+  const hoveredParent = hoveredEvent?.parent ? topology.byId.get(hoveredEvent.parent) : undefined;
+  const hoveredFile = hover?.kind === "file" ? topology.fileById.get(hover.component) : undefined;
+  const pendingPin = useRef(false);
+  const boundaries = useMemo(() => openingEvidenceBoundaries(topology), [topology]);
+  const commitPositions = useMemo(() => timelineCommitTickPositions(commits.map(commit => commit.event_boundary),
+    boundaries.positions, 8, topology.presentX), [commits, boundaries, topology.presentX]);
+  const commitTicks = useMemo(() => timelineCommitTickGroups(commitPositions), [commitPositions]);
+  const anchorName = evidence?.kind === "anchor" && anchor ? evidence.name : undefined;
+  const anchorBoundary = anchorTimeline.find(slice => slice.name === anchorName)?.event_boundary;
+  const anchorPin = anchor ? timelineAnchorPosition(anchorBoundary == null ? undefined : boundaries.positions[anchorBoundary],
+    anchor.commit, commits, commitPositions) : undefined;
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => setCopyState("idle"), [commit?.commit]);
+  useEffect(() => setHover(undefined), [topology]);
+  const panelHeight = evolveInspectorHeight(inspectorHeight, availableHeight);
+  const drag = useRef<{pointerId: number; y: number; height: number; scale: number; current: number} | undefined>(undefined);
+  const cache = useRef(new Map<string, string>());
+  const pending = useRef(new Map<string, Promise<string>>());
+  const [retry, setRetry] = useState(0);
+  const [read, setRead] = useState<{key: string; content?: string; error?: string}>();
+  const key = JSON.stringify([root, snapshot, event?.file]);
+  const loadImage = useCallback((path: string) => loadProjectImage(root, snapshot, path), [root, snapshot]);
+  const [linkPreview, setLinkPreview] = useState<string>();
+  const previewLink = useCallback((_source: "pointer" | "focus", address?: string) => setLinkPreview(address), []);
+  const [commitIndex, setCommitIndex] = useState(0);
+  useEffect(() => {if (evidence?.kind === "git") setCommitIndex(Math.max(0, commits.length - 1));}, [commits, evidence?.kind]);
+  const commitPage = timelineCommitPage(commits.length, commitIndex);
+  const [fileEventIndex, setFileEventIndex] = useState<{component: string; index: number}>();
+  const fileEvents = useMemo(() => file ? layout.points.filter(point =>
+    point.predecessors.includes(file.component) || point.successors.includes(file.component)) : [], [layout, file]);
+  const fileEventPage = timelineCommitPage(fileEvents.length, fileEventIndex?.component === file?.component ? fileEventIndex?.index ?? 0 : 0);
+  const ancestry = useMemo(() => {
+    const result: EventPoint[] = [];
+    let parent = point?.parent;
+    while (parent) {
+      const ancestor = layout.byId.get(parent);
+      if (!ancestor) break;
+      result.unshift(ancestor);
+      parent = ancestor.parent;
     }
+    return result;
+  }, [layout, point]);
 
-    const target = [...targetValuesRef.current];
-    const from = target.map(
-      (value, index) => renderedValuesRef.current[index] ?? value,
-    );
-    const unchanged = target.every(
-      (value, index) => Math.abs(value - from[index]) < 0.001,
-    );
-    if (
-      unchanged ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      renderedValuesRef.current = target;
-      applyValuesRef.current(target);
-      return;
+  const publishViewport = useCallback((next: typeof viewport | undefined, nativeScroll: boolean, explicitFocus?: number) => {
+    if (!next && explicitFocus === undefined) return;
+    const view = next ?? lastViewport.current;
+    const horizontal = lastViewport.current.left !== view.left || lastViewport.current.width !== view.width;
+    const focus = Math.max(0, Math.min(topology.width, explicitFocus ?? (horizontal && topology.width > view.width
+      ? eventNavigatorLens(topology.width, view.width, view.left).focus : historyPositionRef.current)));
+    const moved = lastViewport.current.left !== view.left || lastViewport.current.top !== view.top || historyPositionRef.current !== focus;
+    lastViewport.current = view;
+    historyPositionRef.current = focus;
+    eventLens.current?.update(focus);
+    setHistoryPosition(focus);
+    if (nativeScroll && moved && workspace.current) {
+      if (workspace.current.dataset.scrolling !== "true") workspace.current.dataset.scrolling = "true";
+      clearTimeout(scrollIdle.current);
+      scrollIdle.current = setTimeout(() => { delete workspace.current?.dataset.scrolling; }, 120);
     }
-
-    applyValuesRef.current(from);
-    const startedAt = coordinatedStartedAt ?? performance.now();
-    const animate = (now: number) => {
-      const elapsed = now - startedAt;
-      const values = target.map((value, index) =>
-        timelineReorderValue(from[index], value, elapsed),
-      );
-      renderedValuesRef.current = values;
-      applyValuesRef.current(values);
-      if (elapsed < TIMELINE_REORDER_DURATION_MS) {
-        animationFrameRef.current = window.requestAnimationFrame(animate);
-      } else {
-        animationFrameRef.current = undefined;
-      }
-    };
-    animationFrameRef.current = window.requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = undefined;
-      }
-    };
-  }, [coordinatedStartedAt, targetKey]);
-}
-
-type TimelineEntryRetirementPhase = "moving" | "holding" | "fading";
-
-interface TimelineQueuedRetirement extends TimelineCrossedRetirement {
-  id: string;
-  managed: boolean;
-  color: string;
-  startedAt: number;
-  initialY: number;
-  phase: TimelineEntryRetirementPhase;
-}
-
-type TimelineRetirementQueueItem = Omit<TimelineQueuedRetirement, "phase">;
-
-interface TimelineRailEntry {
-  span: TimelineIntentSpan;
-  managed: boolean;
-  color: string;
-  initialY?: number;
-  retirementPhase?: TimelineEntryRetirementPhase;
-}
-
-function useTimelineRetirementQueue(
-  boundary: number,
-  presentation: TimelinePresentation,
-  initialYByPath: ReadonlyMap<string, number>,
-  currentYByPath: ReadonlyMap<string, number>,
-  managedPaths: ReadonlySet<string>,
-  colorByPath: ReadonlyMap<string, string>,
-): readonly TimelineQueuedRetirement[] {
-  const committedBoundaryRef = useRef(boundary);
-  const [queue, setQueue] = useState<TimelineRetirementQueueItem[]>([]);
-  const [sampledAt, setSampledAt] = useState(() => performance.now());
-  const reducedMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
+    if (moved) setHover(undefined);
+    if (next) setViewport(next);
+  }, [topology.width]);
+  const scrollers = useCallback(() => canvas.current && eventStrip.current && fileRail.current
+    ? {canvas: canvas.current, events: eventStrip.current, files: fileRail.current} : undefined, []);
+  const updateViewport = useCallback(() => {
+    const ports = scrollers();
+    if (!ports) return;
+    const next = scrollSync.measure(ports);
+    if (next && next.width !== lastViewport.current.width) {
+      // Retain the logical position through resize, including transitions
+      // between a fully fitted history and one with native overflow.
+      const focus = Math.min(topology.width, historyPositionRef.current);
+      ports.canvas.scrollLeft = eventLensScrollLeft(focus, next.width, topology.width);
+      publishViewport(scrollSync.align(ports) ?? next, false, focus);
+    } else publishViewport(next, false);
+  }, [scrollers, scrollSync, publishViewport, topology.width]);
+  const scrollCanvas = useCallback(() => {
+    const ports = scrollers();
+    if (ports) publishViewport(scrollSync.scroll("canvas", ports), true);
+  }, [scrollers, scrollSync, publishViewport]);
+  const scrollEvents = useCallback(() => {
+    const ports = scrollers();
+    if (ports) publishViewport(scrollSync.scroll("events", ports), true);
+  }, [scrollers, scrollSync, publishViewport]);
+  const scrollFiles = useCallback(() => {
+    const ports = scrollers();
+    if (ports) publishViewport(scrollSync.scroll("files", ports), true);
+  }, [scrollers, scrollSync, publishViewport]);
+  const previewEvent = useCallback((component?: string) => {
+    if (!workspace.current?.dataset.scrolling) setHover(component ? {kind: "event", component} : undefined);
+  }, []);
+  useEffect(() => () => clearTimeout(scrollIdle.current), []);
   useLayoutEffect(() => {
-    const previousBoundary = committedBoundaryRef.current;
-    committedBoundaryRef.current = boundary;
-    if (reducedMotion || boundary <= previousBoundary) return;
-
-    const openPaths = new Set(presentation.focusedSlice?.openPaths ?? []);
-    const crossed = timelineRetirementsCrossed(
-      presentation,
-      previousBoundary,
-      boundary,
-    ).filter(
-      (retirement) => retirement.span && !openPaths.has(retirement.path),
-    );
-    if (crossed.length === 0) return;
-
-    const startedAt = performance.now();
-    setQueue((current) => {
-      const stillActive = current.filter(
-        (item) =>
-          startedAt - item.startedAt < TIMELINE_RETIREMENT_TOTAL_DURATION_MS,
-      );
-      const queuedPaths = new Set(stillActive.map((item) => item.path));
-      const additions = crossed.flatMap<TimelineRetirementQueueItem>(
-        (retirement) => {
-          const span = retirement.span;
-          if (!span || queuedPaths.has(retirement.path)) return [];
-          queuedPaths.add(retirement.path);
-          return [
-            {
-              ...retirement,
-              id: `${retirement.eventBoundary}:${retirement.path}`,
-              managed: managedPaths.has(retirement.path),
-              color: colorByPath.get(retirement.path) ?? "currentColor",
-              startedAt,
-              initialY:
-                initialYByPath.get(retirement.path) ??
-                currentYByPath.get(retirement.path) ??
-                timelineYForLane(span.lane),
-            },
-          ];
-        },
-      );
-      return additions.length > 0 ? [...stillActive, ...additions] : stillActive;
+    const element = canvas.current;
+    const container = workspace.current;
+    if (!element || !container) return;
+    const observer = new ResizeObserver(() => {
+      updateViewport();
+      const chrome = [...container.querySelectorAll<HTMLElement>(".workspace-banner, .timeline-panel-resize")]
+        .reduce((height, element) => height + element.offsetHeight, 0);
+      setAvailableHeight(container.clientHeight - chrome);
+      setAvailableWidth(container.clientWidth);
     });
-    setSampledAt(startedAt);
-  }, [
-    boundary,
-    colorByPath,
-    currentYByPath,
-    initialYByPath,
-    managedPaths,
-    presentation,
-    reducedMotion,
-  ]);
+    observer.observe(element);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [updateViewport]);
+
+  const currentLayout = useRef(layout);
+  useLayoutEffect(() => { currentLayout.current = layout; }, [layout]);
+  const reveal = useCallback((target: EventPoint) => {
+    const element = canvas.current;
+    if (!element) return;
+    const focus = eventLens.current?.selectionFocus(target.event.component);
+    element.scrollLeft = focus === undefined
+      ? eventLensSelectionLeft(target.x - 10, target.x + 130, element.clientWidth, element.scrollWidth)
+      : eventLensScrollLeft(focus, element.clientWidth, currentLayout.current.width);
+    const junction = currentLayout.current.byId.get(target.event.component)?.junctionY;
+    if (junction !== undefined) {
+      if (junction < element.scrollTop + 24) element.scrollTop = Math.max(0, junction - 60);
+      else if (junction > element.scrollTop + element.clientHeight - 24) element.scrollTop = junction - element.clientHeight + 60;
+    }
+    const strip = eventStrip.current;
+    if (strip) {
+      if (target.y < strip.scrollTop) strip.scrollTop = target.y;
+      else if (target.y + 28 > strip.scrollTop + strip.clientHeight) strip.scrollTop = target.y + 28 - strip.clientHeight;
+    }
+    const ports = scrollers();
+    if (ports) publishViewport(scrollSync.measure(ports), false, focus);
+  }, [scrollers, scrollSync, publishViewport]);
+  useLayoutEffect(() => {
+    const folded = foldAnchor.current;
+    if (folded && canvas.current) {
+      const target = layout.byId.get(folded);
+      foldAnchor.current = undefined;
+      if (target) reveal(target);
+    } else if ((focusAfterLayout.current || (selected && selected !== selection)) && point) {
+      focusAfterLayout.current = false;
+      reveal(point);
+    }
+  }, [layout, point, selected, selection, reveal, updateViewport]);
+  // Only a topology change can clamp the canvas. Lane projection during a
+  // scroll must not synchronously measure the just-rendered SVG again.
+  useLayoutEffect(updateViewport, [topology, updateViewport]);
 
   useEffect(() => {
-    const now = performance.now();
-    if (
-      queue.some(
-        (item) =>
-          now - item.startedAt >= TIMELINE_RETIREMENT_TOTAL_DURATION_MS,
-      )
-    ) {
-      setQueue((current) =>
-        current.filter(
-          (item) =>
-            performance.now() - item.startedAt <
-            TIMELINE_RETIREMENT_TOTAL_DURATION_MS,
-        ),
-      );
+    if (!event) return;
+    let active = true;
+    const cached = cache.current.get(key);
+    if (cached !== undefined) {
+      // A pending read can finish between render and this effect.
+      setRead(previous => previous?.key === key && previous.content === cached ? previous : {key, content: cached});
       return;
     }
-    let nextTransitionAt = Number.POSITIVE_INFINITY;
-    for (const item of queue) {
-      const movingEndsAt =
-        item.startedAt + TIMELINE_RETIREMENT_MOVE_DURATION_MS;
-      const holdingEndsAt =
-        movingEndsAt + TIMELINE_RETIREMENT_HOLD_DURATION_MS;
-      const fadeEndsAt =
-        item.startedAt + TIMELINE_RETIREMENT_TOTAL_DURATION_MS;
-      for (const transitionAt of [movingEndsAt, holdingEndsAt, fadeEndsAt]) {
-        if (transitionAt > now && transitionAt < nextTransitionAt) {
-          nextTransitionAt = transitionAt;
+    setRead(previous => previous?.key === key && previous.error ? undefined : previous);
+    let request = pending.current.get(key);
+    if (!request) {
+      request = loadDocument(root, event.file, snapshot).then(document => {
+        pending.current.delete(key);
+        // Retain a completed selected read even if navigation has moved on.
+        // Exact snapshot keys and this small cap also apply to late results.
+        if (document.content.length <= 256 * 1024) {
+          if (cache.current.size >= 8) cache.current.delete(cache.current.keys().next().value!);
+          cache.current.set(key, document.content);
         }
-      }
+        return document.content;
+      }, error => { pending.current.delete(key); throw error; });
+      pending.current.set(key, request);
     }
-    if (!Number.isFinite(nextTransitionAt)) return;
-    const timeout = window.setTimeout(
-      () => setSampledAt(performance.now()),
-      Math.max(0, nextTransitionAt - performance.now()) + 1,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [queue, sampledAt]);
+    void request.then(content => {
+      if (!active) return;
+      setRead({key, content});
+    }, error => { if (active) setRead({key, error: String(error)}); });
+    return () => { active = false; };
+  }, [root, snapshot, event?.file, key, retry]);
+  useEffect(() => setLinkPreview(undefined), [key]);
 
-  return queue.flatMap<TimelineQueuedRetirement>((item) => {
-    const phase = timelineRetirementMotionPhaseAt(item.startedAt, sampledAt);
-    return phase === "settled" ? [] : [{ ...item, phase }];
-  });
-}
-
-interface TimelinePanelMetrics {
-  sizes: TimelinePanelSizes;
-  clientToLocalY: number;
-}
-
-function releaseTimelinePanelPointerCapture(
-  resize: TimelinePanelResizeInteraction | undefined,
-) {
-  if (!resize) return;
-  try {
-    if (resize.captureTarget.hasPointerCapture(resize.pointerId)) {
-      resize.captureTarget.releasePointerCapture(resize.pointerId);
+  const select = useCallback((target: EventPoint, keepView = false) => {
+    setHover(undefined);
+    setSelected(target.event.component);
+    setEvidence(undefined);
+    if (!keepView) reveal(target);
+  }, [reveal]);
+  const selectFile = useCallback((component: string, interval: string) => setEvidence({kind: "file", component, interval}), []);
+  const toggle = useCallback((id: string) => {
+    setHover(undefined);
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(id);
+    setEvidence(undefined);
+    if (topology.byId.has(id)) foldAnchor.current = id;
+    onExpandedEventsChange([...next]);
+  }, [expanded, topology, onExpandedEventsChange]);
+  function beginResize(e: PointerEvent<HTMLDivElement>) {
+    const container = workspace.current;
+    if (!container || !e.isPrimary || e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.focus({preventScroll: true});
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = {pointerId: e.pointerId, y: e.clientY, height: panelHeight, current: panelHeight,
+      scale: container.clientHeight / container.getBoundingClientRect().height};
+  }
+  function moveResize(e: PointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    if (!current || current.pointerId !== e.pointerId) return;
+    current.current = evolveInspectorHeight(current.height + (e.clientY - current.y) * current.scale, availableHeight);
+    workspace.current?.style.setProperty("--timeline-inspector-panel-height", `${current.current}px`);
+    e.currentTarget.setAttribute("aria-valuenow", String(current.current));
+  }
+  function finishResize(e: PointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    if (!current || current.pointerId !== e.pointerId) return;
+    drag.current = undefined;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    onInspectorHeightChange(current.current);
+  }
+  const cachedContent = cache.current.get(key);
+  const document = cachedContent !== undefined ? {key, content: cachedContent, error: undefined} : read?.key === key ? read : undefined;
+  const centerOn = useCallback((x: number) => {
+    const element = canvas.current;
+    if (!element) return;
+    element.scrollLeft = centeredTimelineScrollLeft(x, element.clientWidth, element.scrollWidth);
+    updateViewport();
+  }, [updateViewport]);
+  const focusHistory = useCallback((x: number) => {
+    const ports = scrollers();
+    if (!ports) return;
+    // Scrubbing uses the measured bounds and the same immediate lane motion
+    // as native scrolling; it does not remeasure the canvas on every move.
+    ports.canvas.scrollLeft = eventLensScrollLeft(x, lastViewport.current.width, currentLayout.current.width);
+    publishViewport(scrollSync.align(ports), true, x);
+  }, [scrollers, scrollSync, publishViewport]);
+  useLayoutEffect(() => {
+    if (!pendingPin.current) return;
+    if (anchorPin) centerOn(anchorPin.x);
+    pendingPin.current = false;
+  }, [anchorName, anchorPin?.x, layout, centerOn]);
+  function selectAnchor(name: string) {
+    if (anchorName === name) {setEvidence({kind: "git"}); lastGitSelection.current = {kind: "git"}; return;}
+    const boundary = anchorTimeline.find(slice => slice.name === name)?.event_boundary;
+    const component = boundary == null ? undefined : boundaries.components[boundary];
+    if (component) {
+      const parents = new Map(graph.events.flatMap(event => event.children.map(child => [child, event.component] as const)));
+      const next = new Set(expanded);
+      if (graph.events.find(event => event.component === component)?.children.length) next.add(component);
+      for (let parent = parents.get(component); parent; parent = parents.get(parent)) next.add(parent);
+      if (next.size !== expanded.size) onExpandedEventsChange([...next]);
     }
-  } catch {
-    // The global drag listeners do not depend on element-level capture.
+    pendingPin.current = true;
+    lastGitSelection.current = {kind: "anchor", name};
+    setEvidence(lastGitSelection.current);
   }
-}
+  const selectCommit = useCallback((hash: string) => {
+    lastGitSelection.current = {kind: "commit", commit: hash};
+    setEvidence(lastGitSelection.current);
+    const index = commits.findIndex(item => item.commit === hash);
+    setCommitIndex(index);
+    if (commitPositions[index]) centerOn(commitPositions[index].x);
+  }, [commits, commitPositions, centerOn]);
+  function openGitEvidence() {
+    if (gitActive) return;
+    const previous = lastGitSelection.current;
+    if (previous.kind === "anchor" && graph.anchors[previous.name]) selectAnchor(previous.name);
+    else if (previous.kind === "commit" && commits.some(commit => commit.commit === previous.commit)) selectCommit(previous.commit);
+    else setEvidence({kind: "git"});
+  }
+  function beginRailResize(e: PointerEvent<HTMLDivElement>) {
+    if (!e.isPrimary || e.button !== 0 || !workspace.current) return;
+    e.preventDefault();e.currentTarget.focus({preventScroll: true});e.currentTarget.setPointerCapture(e.pointerId);
+    railDrag.current = {pointerId: e.pointerId, x: e.clientX, width: fittedRailWidth, current: fittedRailWidth,
+      scale: workspace.current.clientWidth / workspace.current.getBoundingClientRect().width};
+  }
+  function moveRailResize(e: PointerEvent<HTMLDivElement>) {
+    const drag = railDrag.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    drag.current = resizeEvolveRail(drag.width, (e.clientX - drag.x) * drag.scale, availableWidth);
+    workspace.current?.style.setProperty("--timeline-entry-rail-width", `${drag.current}px`);
+    e.currentTarget.setAttribute("aria-valuenow", String(drag.current));
+  }
+  function finishRailResize(e: PointerEvent<HTMLDivElement>) {
+    const drag = railDrag.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    railDrag.current = undefined;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    onRailWidthChange(drag.current);
+  }
 
-interface TimelineRailResizeControlProps {
-  width: number;
-  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
-  onReset: () => void;
-}
+  return <section className="timeline-workspace" ref={workspace} aria-label="Evolve"
+    style={{"--timeline-inspector-panel-height": `${panelHeight}px`, "--timeline-entry-rail-width": `${fittedRailWidth}px`} as CSSProperties}>
+    <WorkspaceBanner ariaLabel="Evolve summary" className="timeline-summary" multiline trailing={
+      <button type="button" className="timeline-close" aria-label="Close Evolve and return to Structure" title="Return to Structure" onClick={onClose}><CloseIcon /><span>Structure</span></button>
+    }>
+      <div className="timeline-navigation" role="toolbar" aria-label="Evolve navigation">
+        <strong className="timeline-summary__title">Evolve</strong>
+        <div className="timeline-navigation__mode" role="group" aria-label="Inspector content">
+          <button type="button" aria-pressed={!gitActive} aria-label="Show Event discussions" onClick={() => {setEvidence(undefined);if (point) reveal(point);}}>Events <small>{graph.events.length}</small></button>
+          <button type="button" aria-pressed={gitActive} aria-label="Git evidence" onClick={openGitEvidence}>Git <small>{commits.length || (historyLoading ? "…" : "")}</small></button>
+        </div>
+        <div className="timeline-navigation__travel" role="group" aria-label="Navigate the timeline">
+          <button type="button" aria-label="First Event" title="First Event · Home" disabled={!rows.length} onClick={() => {select(layout.points[0]); focusHistory(0);}}><ChevronIcon className="timeline-nav-first" /></button>
+          <button type="button" aria-label="Previous Event" title="Previous Event · ↑" disabled={!point || point.ordinal <= 1} onClick={() => select(layout.points[point!.ordinal - 2])}><ChevronIcon className="timeline-nav-previous" /></button>
+          <button type="button" aria-label="Next Event" title="Next Event · ↓" disabled={!point || point.ordinal >= rows.length} onClick={() => select(layout.points[point!.ordinal])}><ChevronIcon /></button>
+          <button type="button" aria-label="Present" title="Present Opening" onClick={() => {lastGitSelection.current = {kind: "git"};setEvidence(lastGitSelection.current);focusHistory(layout.width);}}>Present <span aria-hidden="true">→</span></button>
+        </div>
+        <button type="button" className="timeline-navigation__overview" aria-label="Fold all summaries" title="Return to the summary overview" disabled={!expandedEvents.length} onClick={() => {focusAfterLayout.current = true; onExpandedEventsChange([]);}}><LayersIcon size={13} /> Overview</button>
+      </div>
+      <HelpOnly><p className="timeline-summary__help">Select an Event to read it. Its chevron folds the discussion and file flow together. Each Event level has its own zoom, coordinated at one history position. Scroll horizontally or drag a row for coarse or fine navigation; use its +/− controls or ⌘/Ctrl + scroll to zoom. Scroll vertically to reach deeper levels. The bottom ruler moves through the whole history. Focus a level number for arrow-key navigation and +/− zoom; 0 resets it. Git marks open exact evidence. In the Event tree, arrow keys navigate; Space folds; Enter opens Reader.</p></HelpOnly>
+    </WorkspaceBanner>
 
-interface TimelinePanelResizeControlProps {
-  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
-  onReset: () => void;
-}
+    <section className={`timeline-inspector${gitActive ? " timeline-inspector--git" : ""}`} aria-label={anchor ? "Anchor evidence" : commit ? "Commit evidence" : gitActive ? "Git evidence inspector" : file ? "Opening file history" : "Event discussion"}>
+      <header className="timeline-inspector__heading">
+        <span className="timeline-inspector__kind">{commit ? "Commit" : gitActive ? "Git evidence" : file ? "File history" : event?.children.length ? "Summary" : event ? "Event" : "Evolve"}</span>
+        {event && ancestry.length ? <nav className="timeline-ancestry" aria-label="Event summaries">{ancestry.map(ancestor =>
+          <button type="button" key={ancestor.event.component} title={ancestor.event.file} onClick={() => select(ancestor)}>{ancestor.event.name.replace(/\.md$/, "")}<span aria-hidden="true"> ›</span></button>)}</nav> : null}
+        <strong title={event?.file ?? anchor?.file ?? file?.path ?? commit?.commit}>{event?.name.replace(/\.md$/, "") ?? anchorName ?? (commit ? commit.subject || "Empty commit message" : undefined) ?? file?.name ?? (gitActive ? "Anchors and commits" : "Opening evolution")}</strong>
+        {event && point && (point.predecessors.length || point.successors.length) ? <span className="timeline-participants" aria-label="Opening transition" title={expanded.has(event.component) || !event.children.length ? "Recorded Opening transition" : "Folded Opening effect"}>{point.predecessors.length} → {point.successors.length} files</span> : null}
+        {event || anchor || file?.managed ? <button type="button" className="timeline-reader-action" onClick={e => onSelect(event?.file ?? anchor?.file ?? file!.path, readerNavigationMode(e))}>Open in Reader <span aria-hidden="true">↗</span></button> : null}
+      </header>
+      <div className="timeline-inspector__body">
+        {gitActive ? <TimelineGitBrowser anchors={graph.anchors} commits={commits} selectedAnchor={anchorName} selectedCommit={commit?.commit}
+          page={commitPage} onPage={setCommitIndex} onAnchor={selectAnchor} onCommit={selectCommit}
+          loading={historyLoading} error={historyError} onRetry={onRetryHistory} /> : null}
+        <div className="timeline-inspector__content" key={event?.component ?? anchorName ?? commit?.commit ?? file?.component ?? "git"}>
+          {event ? <>
+            <ReaderImageLoaderContext.Provider value={loadImage}><ReaderMarkdown currentPath={event.file} content={document?.content ?? ""}
+              loading={document?.content === undefined && !document?.error} loadingLabel="Reading Event…" error={document?.error}
+              onSelect={onSelect} onPreviewLink={previewLink} /></ReaderImageLoaderContext.Provider>
+            {document?.error ? <button type="button" onClick={() => {setRead(undefined);setRetry(value => value + 1);}}>Retry reading</button> : null}
+          </> : anchor ? <div className="timeline-evidence-detail">
+            <p>{anchor.description}</p><code>{anchor.commit}</code>
+            <p>{alignmentLabel(anchorBoundary)}</p><p>{anchorPin?.kind === "commit" ? "Pinned at its Git commit, independently of Event alignment." : anchorPin ? "Pinned at its Event boundary. Select this Anchor again to release the pin." : "No position is available in this displayed history."}</p>
+            <p>{anchor.connections.length} historical {anchor.connections.length === 1 ? "connection" : "connections"}</p>
+            {anchor.connections.map((connection, index) => <p key={index}><span>{connection.type}</span> · <code>{connection.target}</code></p>)}
+          </div> : commit ? <div className="timeline-evidence-detail timeline-commit-detail">
+            <div className="timeline-commit-identity"><code>{commit.commit}</code> <button type="button" onClick={async () => {
+              try {await copyTimelineText(commit.commit); setCopyState("copied");} catch {setCopyState("failed");}
+            }}>{copyState === "copied" ? "Copied" : "Copy commit"}</button></div>
+            {copyState === "failed" ? <span role="status">Copy unavailable; select the hash above.</span> : null}
+            <pre className="timeline-commit-message">{commit.message || "(empty commit message)"}</pre>
+            <dl className="timeline-commit-metadata">
+              <dt>Author</dt><dd>{commit.author.name} <span>{commit.author.email}</span></dd>
+              <dt>Authored</dt><dd><CommitDate value={commit.author.date} /></dd>
+              {commit.committer.name !== commit.author.name || commit.committer.email !== commit.author.email || commit.committer.date !== commit.author.date ? <>
+                <dt>Committer</dt><dd>{commit.committer.name} <span>{commit.committer.email}</span></dd>
+                <dt>Committed</dt><dd><CommitDate value={commit.committer.date} /></dd>
+              </> : null}
+              <dt>{commit.parents.length > 1 ? "Parents" : "Parent"}</dt><dd>{commit.parents.length ? commit.parents.map(parent => <code key={parent}>{parent}</code>) : "Root commit"}</dd>
+            </dl>
+            <HelpOnly><p>{alignmentLabel(commit.event_boundary)}</p></HelpOnly>
+          </div>
+            : file ? <div className="timeline-file-history">
+              <p>{file.current ? "In the current Opening." : "Outside the current Opening."} {file.managed ? "" : "Historical identity; exact older bytes remain in Git."}</p>
+              {fileEvents.slice(fileEventPage.start, fileEventPage.end).map(point =>
+                <button type="button" key={point.event.component} onClick={() => select(point)}>{point.event.name.replace(/\.md$/, "")}</button>)}
+              {fileEvents.length > 32 ? <nav aria-label="File Event pages">
+                <button type="button" disabled={fileEventPage.start === 0} onClick={() => setFileEventIndex({component: file.component, index: fileEventPage.start - 1})}>Previous Events</button>
+                <span>{fileEventPage.start + 1}–{fileEventPage.end} of {fileEvents.length}</span>
+                <button type="button" disabled={fileEventPage.end === fileEvents.length} onClick={() => setFileEventIndex({component: file.component, index: fileEventPage.end})}>Next Events</button>
+              </nav> : null}
+              {!file.recorded ? <p>No file transitions are recorded for this current selection.</p> : null}
+            </div> : gitActive ? <div className="timeline-evidence-detail"><p>Select an Anchor or commit here, or a Git mark on the timeline.</p><p>Git records exact versions independently of authored Event discussions.</p></div>
+            : <p className="timeline-empty">Select an Event to read its discussion, or an Opening file to inspect its history.</p>}
+        </div>
+      </div>
+      {linkPreview && event ? <div className="timeline-link-preview">{linkPreview}</div> : null}
+    </section>
 
-function TimelineRailResizeHandle({
-  width,
-  onPointerDown,
-  onKeyDown,
-  onReset,
-}: TimelineRailResizeControlProps) {
-  return (
-    <button
-      className="timeline-entry-rail__resize"
-      type="button"
-      aria-label={`Resize Timeline entry rail, currently ${Math.round(
-        width,
-      )} pixels`}
-      aria-keyshortcuts="ArrowLeft ArrowRight Enter Space"
-      title="Drag to resize the Timeline entry rail. Arrow keys resize; Shift and an arrow resizes farther. Enter or Space restores the default width."
-      data-timeline-rail-resize="timeline"
-      onPointerDown={onPointerDown}
-      onDoubleClick={onReset}
-      onKeyDown={onKeyDown}
-    />
-  );
-}
+    <div className="timeline-panel-resize" role="separator" aria-label="Resize Event reading panel" aria-orientation="horizontal"
+      aria-valuemin={120} aria-valuemax={Math.max(120, availableHeight - 180)} aria-valuenow={panelHeight} tabIndex={0}
+      onPointerDown={beginResize} onPointerMove={moveResize} onPointerUp={finishResize} onPointerCancel={finishResize} onLostPointerCapture={finishResize}
+      onDoubleClick={() => onInspectorHeightChange(DEFAULT_EVOLVE_INSPECTOR_HEIGHT)} onKeyDown={e => {
+        const value = e.key === "ArrowDown" ? panelHeight + 16 : e.key === "ArrowUp" ? panelHeight - 16
+          : e.key === "Home" ? 120 : e.key === "End" ? availableHeight - 180 : undefined;
+        if (value !== undefined) {e.preventDefault(); onInspectorHeightChange(evolveInspectorHeight(value, availableHeight));}
+      }} />
 
-function TimelinePanelResizeHandle({
-  boundary,
-  onPointerDown,
-  onLostPointerCapture,
-  onKeyDown,
-  onReset,
-}: TimelinePanelResizeControlProps & {
-  boundary: TimelinePanelBoundary;
-}) {
-  const label = "Resize Timeline and information panels";
-  return (
-    <button
-      className="timeline-panel-resize timeline-panel-resize--information"
-      type="button"
-      aria-label={label}
-      aria-keyshortcuts="ArrowUp ArrowDown Enter Space"
-      title={`${label}. Drag vertically; Arrow keys resize, Shift resizes farther, and Enter or Space restores the default panel sizes.`}
-      data-timeline-panel-resize={boundary}
-      onPointerDown={onPointerDown}
-      onLostPointerCapture={onLostPointerCapture}
-      onDoubleClick={onReset}
-      onKeyDown={onKeyDown}
-    />
-  );
-}
-
-function TimelineEntryBox({
-  label,
-  meta,
-}: {
-  label: string;
-  meta?: string;
-}) {
-  return (
-    <div className="interface-text-box timeline-entry__box">
-      <span className="timeline-entry__label">{label}</span>
-      {meta ? <span className="timeline-entry__meta">{meta}</span> : null}
+    <div className="timeline-result timeline-result--opening" style={{"--event-strip-height": `${Math.max(56, Math.min(EVENT_LAYERS_HEIGHT, layout.headerHeight))}px`} as CSSProperties}>
+      <EventNavigator topology={topology} expanded={expanded} selection={selection} active={event?.component} preview={hoveredEvent?.event.component}
+        focus={historyPosition} position={historyPositionRef} viewportWidth={viewport.width} element={eventStrip}
+        lens={eventLens} onFocus={focusHistory}
+        onSelect={select} onToggle={toggle} onRead={onSelect} onHover={previewEvent} onScroll={scrollEvents} />
+      <div className="timeline-file-heading"><strong>{focusedBoundary > topology.points.length ? "At present" : `Opening after E${layout.points[focusedBoundary - 1]?.end ?? 0}`}</strong>
+        <small>{focusedBoundary > topology.points.length ? `${opening.files.length} current · ${layout.files.filter(file => !file.current).length} recorded only` : `${layout.files.length} files in this view`}</small>
+        {layout.unrecorded ? <small className="timeline-opening-difference" title="Current Opening includes changes outside the recorded Event flow.">Unrecorded Opening changes</small> : null}
+      </div>
+      <div className="timeline-flow-scroll" ref={canvas} onScroll={scrollCanvas} aria-label="Opening file evolution">
+        <div className="timeline-canvas" style={{width: layout.width, height: canvasHeight}}>
+          <OpeningTimelineCanvas topology={topology} layout={layout} viewport={renderWindow}
+            anchorX={anchorPin?.x} anchorName={anchorName} commitTicks={commitTicks} commits={commits} selectedCommit={commit?.commit}
+            selectedTrace={selectedTrace} traceSelected={Boolean(selectedTraceTarget)} hoverTrace={hoverTrace}
+            onCommit={selectCommit} onEvent={select} onFile={selectFile} onHover={setHover} />
+          {!topology.files.length ? <p className="timeline-empty">No Opening-file transitions recorded. Event discussions remain available above.</p> : null}
+        </div>
+      </div>
+      <aside className="timeline-file-rail" ref={fileRail} aria-label="Opening file entries" onScroll={scrollFiles}>
+        <div style={{height: canvasHeight, position: "relative"}}>{shownFiles.map(item => <button type="button" key={item.component}
+          className={`timeline-file-entry${item.current ? " is-current" : ""}${item.managed ? "" : " is-historical"}${selectedTrace.files.has(item.component) ? " is-selected" : ""}${hoverTrace.files.has(item.component) ? " is-previewed" : ""}`}
+          style={{transform: `translateY(${item.y - FILE_LANE_HEIGHT / 2}px)`, "--timeline-entry-color": item.color} as CSSProperties} title={item.path}
+          aria-label={`${item.path}${item.current ? ", current Opening" : ""}${item.managed ? "" : ", historical"}`}
+          onMouseEnter={() => setHover({kind: "file", component: item.component, interval: item.interval})} onMouseLeave={() => setHover(undefined)}
+          onFocus={() => setHover({kind: "file", component: item.component, interval: item.interval})} onBlur={() => setHover(undefined)}
+          onClick={e => {setEvidence({kind: "file", component: item.component, interval: item.interval}); if (item.managed) onSelect(item.path, readerNavigationMode(e));}}>
+          <span className="timeline-entry-box"><span className="timeline-entry-name">{item.name}</span><span className="timeline-entry-id">{item.path.split("/").slice(0, -1).join("/")}</span></span>
+        </button>)}
+          {retiringFiles.filter(item => item.y >= viewport.top - FILE_LANE_HEIGHT && item.y <= viewport.top + viewport.height + FILE_LANE_HEIGHT).map(item =>
+            <RetiringFileLabel key={item.component} file={item} onSelect={mode => {setEvidence({kind: "file", component: item.component, interval: item.interval});if (item.managed) onSelect(item.path, mode);}} />)}
+        </div>
+      </aside>
+      <div className="timeline-rail-resize" role="separator" aria-label="Resize Opening file rail" aria-orientation="vertical" tabIndex={0}
+        aria-valuemin={132} aria-valuemax={Math.max(132, Math.min(520, availableWidth - 260))} aria-valuenow={fittedRailWidth}
+        onPointerDown={beginRailResize} onPointerMove={moveRailResize} onPointerUp={finishRailResize} onPointerCancel={finishRailResize} onLostPointerCapture={finishRailResize}
+        onDoubleClick={() => onRailWidthChange(DEFAULT_EVOLVE_RAIL_WIDTH)} onKeyDown={e => {
+          const step = e.shiftKey ? 48 : 16;
+          const width = e.key === "ArrowLeft" ? fittedRailWidth + step : e.key === "ArrowRight" ? fittedRailWidth - step
+            : e.key === "Home" ? 132 : e.key === "End" ? 520 : e.key === "Enter" || e.key === " " ? DEFAULT_EVOLVE_RAIL_WIDTH : undefined;
+          if (width !== undefined) {e.preventDefault();onRailWidthChange(resizeEvolveRail(width, 0, availableWidth));}
+        }} />
+      {hoveredFile || hoveredEvent ? <div className="timeline-hover-preview" role="tooltip">
+        <strong>{hoveredFile?.path ?? hoveredEvent?.event.name.replace(/\.md$/, "")}</strong>
+        {hoveredParent ? <span>Parent: {hoveredParent.event.name.replace(/\.md$/, "")}</span> : null}
+        <span>{hoveredFile ? `${hoveredFile.managed ? "Registered file" : "Historical identity"} · ${hoveredFile.component}`
+          : `${hoveredEvent!.subtreeEnd - hoveredEvent!.start} ${hoveredEvent!.subtreeEnd - hoveredEvent!.start === 1 ? "Event" : "Events"} · ${hoveredEvent!.predecessors.length} before → ${hoveredEvent!.successors.length} after`}</span>
+      </div> : null}
     </div>
-  );
+
+  </section>;
 }
 
-const TimelineFileEntry = memo(function TimelineFileEntry({
-  span,
-  label,
-  target,
-  y,
-  initialY,
-  retirementPhase,
-  active,
-  primary,
-  anchored,
-  pressed,
-  managed,
-  color,
-  onHover,
-  onActivate,
-}: {
-  span: TimelineIntentSpan;
-  label?: string;
-  target: Extract<TimelineSelectionTarget, { kind: "intent" }>;
-  y: number;
-  initialY?: number;
-  retirementPhase?: TimelineEntryRetirementPhase;
-  active: boolean;
-  primary: boolean;
-  anchored: boolean;
-  pressed: boolean;
-  managed: boolean;
-  color: string;
-  onHover: TimelineTargetInteraction;
-  onActivate: TimelineIntentInteraction;
+function TimelineGitBrowser({anchors, commits, selectedAnchor, selectedCommit, page, onPage, onAnchor, onCommit, loading, error, onRetry}: {
+  anchors: GraphData["anchors"]; commits: TimelineCommit[]; selectedAnchor?: string; selectedCommit?: string;
+  page: {start: number; end: number}; onPage: (index: number) => void; onAnchor: (name: string) => void;
+  onCommit: (hash: string) => void; loading: boolean; error?: string; onRetry: () => void;
 }) {
-  const path = span.path;
-  const entryRef = useRef<HTMLButtonElement>(null);
-  useTimelineReorderAnimation(
-    [y],
-    ([animatedY]) => {
-      if (animatedY === undefined || !entryRef.current) return;
-      entryRef.current.style.transform = `translateY(calc(${animatedY}px - 50%))`;
-    },
-    [initialY ?? y],
-  );
-
-  return (
-    <button
-      ref={entryRef}
-      className={`timeline-entry timeline-file-entry${
-        active ? " is-active" : ""
-      }${primary ? " is-primary" : ""}${anchored ? " is-anchor-tied" : ""}${
-        managed ? "" : " is-timeline-only"
-      }${retirementPhase ? " is-retiring" : ""}${
-        retirementPhase === "moving" ? " is-retirement-moving" : ""
-      }${
-        retirementPhase === "fading" ? " is-retirement-fading" : ""
-      }`}
-      type="button"
-      style={
-        {
-          top: 0,
-          transform: `translateY(calc(${y}px - 50%))`,
-          "--timeline-entry-color": color,
-        } as CSSProperties
-      }
-      aria-pressed={pressed}
-      aria-label={
-        managed
-          ? `Focused intent ${path}; activate its current managed file`
-          : `Focused historical intent ${path}; current managed prose is unavailable, activate to select its lifeline`
-      }
-      title={
-        managed
-          ? path
-          : `${path} · Timeline intent only; no current managed file`
-      }
-      data-timeline-entry="ordinary"
-      data-retirement-phase={retirementPhase}
-      data-path={path}
-      onMouseEnter={() => onHover(target)}
-      onMouseLeave={() => onHover(undefined)}
-      onFocus={() => onHover(target)}
-      onBlur={() => onHover(undefined)}
-      onClick={(event) =>
-        onActivate(span, "file-entry", readerNavigationMode(event))
-      }
-    >
-      <TimelineEntryBox label={label ?? path} meta={label ? path : undefined} />
-    </button>
-  );
-});
-
-function TimelineAnchorDockRow({
-  entry,
-  boundary,
-  selected,
-  mapped,
-  onSelect,
-  onActivate,
-}: {
-  entry: TimelineAnchorEntry;
-  boundary: string;
-  selected: boolean;
-  mapped: boolean;
-  onSelect: () => void;
-  onActivate: (mode: ReaderNavigationMode) => void;
-}) {
-  const path = entry.definition.file;
-  const connectionCount = entry.definition.connections.length;
-
-  return (
-    <div
-      className={`timeline-anchor-dock__row${
-        selected ? " is-selected" : ""
-      }${mapped ? "" : " is-unmapped"}`}
-      style={
-        {
-          "--timeline-entry-color": mapped
-            ? "var(--color-relationship)"
-            : "#a77965",
-        } as CSSProperties
-      }
-      data-anchor={entry.name}
-    >
-      <button
-        className="timeline-anchor-dock__locate"
-        type="button"
-        aria-pressed={selected}
-        aria-label={`Visualize anchor ${entry.name}, ${connectionCount} historical connections, ${boundary}`}
-        title={`Locate ${entry.name} in the ordinary Timeline · ${boundary}`}
-        onClick={onSelect}
-      >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="3" r="1.8" />
-          <path d="M8 4.8v7.5M4.1 8.1v1.1a3.9 3.9 0 0 0 7.8 0V8.1M2.8 8.2h2.7M10.5 8.2h2.7" />
-        </svg>
-      </button>
-      <button
-        className="timeline-entry timeline-anchor-file-entry timeline-anchor-dock__file"
-        type="button"
-        aria-label={`Open current anchor file ${path} for ${entry.name}, ${boundary}`}
-        title={`${path} · current file for ${entry.name}`}
-        data-timeline-entry="anchor"
-        data-anchor={entry.name}
-        data-path={path}
-        onClick={(event) => onActivate(readerNavigationMode(event))}
-      >
-        <TimelineEntryBox label={path} />
-      </button>
+  const list = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = list.current;
+    if (!container) return;
+    const active = container.querySelector<HTMLButtonElement>('[aria-pressed="true"]');
+    if (active) container.scrollTop = Math.max(0, active.offsetTop - container.clientHeight / 2 + active.offsetHeight / 2);
+    else container.scrollTop = 0;
+  }, [page.start, selectedCommit]);
+  return <aside className="timeline-git-browser" aria-label="Git evidence navigator">
+    {Object.keys(anchors).length ? <div className="timeline-git-anchors">
+      <div className="timeline-git-label">Anchors <span>{Object.keys(anchors).length}</span></div>
+      {Object.entries(anchors).map(([name, definition]) => <button type="button" key={name} title={definition.commit} aria-pressed={selectedAnchor === name} onClick={() => onAnchor(name)}><AnchorIcon size={12} /><span>{name}</span></button>)}
+    </div> : null}
+    <div className="timeline-git-label">Commits <span>{commits.length ? `${page.start + 1}–${page.end} / ${commits.length}` : ""}</span>
+      <button type="button" aria-label="Previous commits" disabled={!commits.length || page.start === 0} onClick={() => onPage(page.start - 1)}><ChevronIcon className="timeline-nav-previous" size={12} /></button>
+      <button type="button" aria-label="Next commits" disabled={!commits.length || page.end === commits.length} onClick={() => onPage(page.end)}><ChevronIcon size={12} /></button>
     </div>
-  );
+    <div className="timeline-git-commits" ref={list}>
+      {loading ? <p role="status">Loading Git history…</p> : error ? <p role="alert">{error} <button type="button" onClick={onRetry}>Retry</button></p> : !commits.length ? <p>No Git commits available.</p> : commits.slice(page.start, page.end).map(item =>
+        <button type="button" key={item.commit} title={`${item.subject}\n${item.commit}\n${item.author.name} · ${item.author.date}`} aria-pressed={selectedCommit === item.commit} onClick={() => onCommit(item.commit)}>
+          <strong>{item.subject || "Empty commit message"}</strong><span><code>{item.commit.slice(0, 10)}</code><CommitDate value={item.author.date} compact /></span>
+        </button>)}
+    </div>
+  </aside>;
 }
 
-function handleTimelineKey(
-  event: KeyboardEvent<SVGGElement>,
-  select: () => void,
-) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  select();
+function CommitDate({value, compact = false}: {value: string; compact?: boolean}) {
+  const date = new Date(value);
+  return <time dateTime={value} title={value}>{Number.isNaN(date.getTime()) ? value : compact ? date.toLocaleDateString() : date.toLocaleString()}</time>;
 }
 
-function connectorPathAtY(
-  connector: TimelineIntentConnector,
-  xForColumn: (column: number) => number,
-  laneY: number,
-  junctionY: number,
-) {
-  const eventX = xForColumn(connector.column);
-  const side = connector.side === "predecessor" ? -1 : 1;
-  const outerX = eventX + side * TIMELINE_JUNCTION_GAP;
-  const control = TIMELINE_JUNCTION_GAP * 0.58;
-  if (connector.side === "predecessor") {
-    return `M ${outerX} ${laneY} C ${outerX + control} ${laneY}, ${
-      eventX - control
-    } ${junctionY}, ${eventX} ${junctionY}`;
-  }
-  return `M ${eventX} ${junctionY} C ${eventX + control} ${junctionY}, ${
-    outerX - control
-  } ${laneY}, ${outerX} ${laneY}`;
-}
-
-function anchorSliceX(
-  eventBoundary: number | null | undefined,
-  eventCount: number,
-  eventMarkers: TimelineEventMarker[],
-  xForColumn: (column: number) => number,
-): number | undefined {
-  if (
-    eventBoundary === null ||
-    eventBoundary === undefined ||
-    eventBoundary < 0 ||
-    eventBoundary > eventCount
-  ) {
-    return undefined;
-  }
-  if (eventCount === 0) return xForColumn(0);
-  if (eventBoundary === eventCount) return xForColumn(eventMarkers.length);
-  if (eventBoundary === 0) return xForColumn(-0.22);
-
-  const precedingMarker = eventMarkers.find(
-    (marker) =>
-      marker.startEventIndex <= eventBoundary - 1 &&
-      marker.endEventIndex >= eventBoundary - 1,
-  );
-  const followingMarker = eventMarkers.find(
-    (marker) => marker.startEventIndex === eventBoundary,
-  );
-  if (!precedingMarker) return undefined;
-  return xForColumn(
-    followingMarker
-      ? (precedingMarker.column + followingMarker.column) / 2
-      : precedingMarker.column,
-  );
-}
-
-function commitEventBoundaryX(
-  eventBoundary: number,
-  eventCount: number,
-  eventMarkers: TimelineEventMarker[],
-  xForColumn: (column: number) => number,
-): number | undefined {
-  if (eventBoundary < 0 || eventBoundary > eventCount) return undefined;
-  if (eventBoundary === 0) return xForColumn(-0.18);
-  const marker = eventMarkers.find(
-    (candidate) =>
-      candidate.startEventIndex <= eventBoundary - 1 &&
-      candidate.endEventIndex >= eventBoundary - 1,
-  );
-  return marker ? xForColumn(marker.column) : undefined;
-}
-
-function anchorBoundaryLabel(
-  eventBoundary: number | null | undefined,
-  eventCount: number,
-  position?: TimelineAnchorPosition,
-): string {
-  if (eventBoundary === null || eventBoundary === undefined) {
-    return position?.kind === "commit"
-      ? "at its Git commit; Event boundary unknown"
-      : "position unavailable in the current Timeline";
-  }
-  if (eventCount === 0 || eventBoundary === eventCount) {
-    return "at the present registered flow";
-  }
-  if (eventBoundary === 0) return "before E1";
-  return `after E${eventBoundary}`;
+function alignmentLabel(boundary?: number | null): string {
+  return boundary == null ? "Event alignment unknown." : `Matches the authored Event registry prefix through ${boundary} records.`;
 }
 
 async function copyTimelineText(value: string): Promise<void> {
@@ -710,2534 +570,39 @@ async function copyTimelineText(value: string): Promise<void> {
       return;
     }
   } catch {
-    // Fall through to the local selection path for native WebViews that deny
-    // the asynchronous Clipboard API.
+    // Native WebViews can deny the asynchronous API while allowing a user copy.
   }
-
+  const focused = document.activeElement;
   const field = document.createElement("textarea");
   field.value = value;
   field.readOnly = true;
-  field.style.position = "fixed";
-  field.style.opacity = "0";
-  field.style.pointerEvents = "none";
+  field.style.cssText = "position:fixed;opacity:0;pointer-events:none";
   document.body.append(field);
   field.select();
   try {
-    if (!document.execCommand("copy")) {
-      throw new Error("The native clipboard rejected the copy request.");
-    }
+    if (!document.execCommand("copy")) throw new Error("Clipboard copy unavailable.");
   } finally {
     field.remove();
+    if (focused instanceof HTMLElement && focused.isConnected) focused.focus({preventScroll: true});
   }
 }
 
-interface TimelineSpanRenderItem {
-  span: TimelineIntentSpan;
-  target: Extract<TimelineSelectionTarget, { kind: "intent" }>;
-  hitRegion: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  linePath: string;
-  lineStartX: number;
-  lineEndX: number;
-  y: number;
-  color: string;
-  open: boolean;
-}
-
-interface TimelineConnectorRenderItem {
-  connector: TimelineIntentConnector;
-  pathData: string;
-  laneY: number;
-  junctionY: number;
-  color: string;
-  span?: TimelineIntentSpan;
-  target?: Extract<TimelineSelectionTarget, { kind: "intent" }>;
-}
-
-interface TimelineEventRenderItem {
-  marker: TimelineEventMarker;
-  transform: string;
-  x: number;
-  y: number;
-  target: Extract<TimelineSelectionTarget, { kind: "event" }>;
-}
-
-interface TimelineRenderData {
-  spans: TimelineSpanRenderItem[];
-  connectors: TimelineConnectorRenderItem[];
-  events: TimelineEventRenderItem[];
-  spanRenderById: Map<string, TimelineSpanRenderItem>;
-  connectorRenderById: Map<string, TimelineConnectorRenderItem>;
-  eventRenderById: Map<string, TimelineEventRenderItem>;
-  eventById: Map<string, TimelineEventMarker>;
-  spanById: Map<string, TimelineIntentSpan>;
-  targetBySpanId: Map<
-    string,
-    Extract<TimelineSelectionTarget, { kind: "intent" }>
-  >;
-  colorByPath: Map<string, string>;
-  laneByPath: Map<string, number>;
-}
-
-type TimelineTargetInteraction = (
-  target: TimelineSelectionTarget | undefined,
-) => void;
-
-type TimelineSelectableElementRegistrar = (
-  key: string,
-  element: SVGGElement | null,
-) => void;
-
-function setTimelineHoverVisibility(
-  element: SVGElement | null,
-  visible: boolean,
-) {
-  if (!element) return;
-  if (visible) element.setAttribute("data-timeline-hover-visible", "true");
-  else element.removeAttribute("data-timeline-hover-visible");
-}
-
-function setTimelineHoverPath(
-  element: SVGPathElement | null,
-  pathData: string | undefined,
-  color: string | undefined,
-) {
-  if (!element || !pathData || !color) {
-    setTimelineHoverVisibility(element, false);
-    return;
-  }
-  element.setAttribute("d", pathData);
-  element.style.color = color;
-  setTimelineHoverVisibility(element, true);
-}
-
-function setTimelineHoverOpenEnd(
-  element: SVGCircleElement | null,
-  item: TimelineSpanRenderItem | undefined,
-) {
-  if (!element || !item?.open) {
-    setTimelineHoverVisibility(element, false);
-    return;
-  }
-  element.setAttribute("cx", `${item.hitRegion.x + item.hitRegion.width}`);
-  element.setAttribute(
-    "cy",
-    `${item.hitRegion.y + item.hitRegion.height / 2}`,
-  );
-  element.style.color = item.color;
-  setTimelineHoverVisibility(element, true);
-}
-
-function setTimelineHoverEvent(
-  element: SVGGElement | null,
-  item: TimelineEventRenderItem | undefined,
-) {
-  if (!element || !item) {
-    setTimelineHoverVisibility(element, false);
-    return;
-  }
-  element.setAttribute("transform", item.transform);
-  const collected = Boolean(item.marker.foldRange) || item.marker.events.length > 1;
-  element.classList.toggle("is-folded", Boolean(item.marker.foldRange));
-  element
-    .querySelector(".timeline-hover-overlay__event-ring")
-    ?.setAttribute("r", collected ? "6.5" : "5.5");
-  const dot = element.querySelector<SVGCircleElement>(
-    ".timeline-hover-overlay__event-dot",
-  );
-  if (dot) dot.style.display = collected ? "none" : "";
-  const count = element.querySelector(".timeline-hover-overlay__event-count");
-  if (count) count.textContent = collected ? String(item.marker.events.length) : "";
-  const label = element.lastElementChild;
-  if (label) label.textContent = timelineEventMarkerLabel(item.marker);
-  setTimelineHoverVisibility(element, true);
-}
-
-type TimelineIntentInteraction = (
-  span: TimelineIntentSpan,
-  surface: TimelineIntentActivationSurface,
-  mode?: ReaderNavigationMode,
-) => void;
-
-const TimelineSpanGlyph = memo(function TimelineSpanGlyph({
-  item,
-  anchored,
-  onElement,
-  onActivate,
-  onHover,
-}: {
-  item: TimelineSpanRenderItem;
-  anchored: boolean;
-  onElement: TimelineSelectableElementRegistrar;
-  onActivate: TimelineIntentInteraction;
-  onHover: TimelineTargetInteraction;
-}) {
-  const { span, target } = item;
-  const selectionKey = timelineSelectionTargetKey(target) ?? span.id;
-  const registerElement = useCallback(
-    (element: SVGGElement | null) => onElement(selectionKey, element),
-    [onElement, selectionKey],
-  );
-  const hitRef = useRef<SVGRectElement>(null);
-  const lineRef = useRef<SVGPathElement>(null);
-  const openEndRef = useRef<SVGCircleElement>(null);
-  useTimelineReorderAnimation([item.y], ([y]) => {
-    if (y === undefined) return;
-    hitRef.current?.setAttribute(
-      "y",
-      `${y - item.hitRegion.height / 2}`,
-    );
-    lineRef.current?.setAttribute(
-      "d",
-      `M ${item.lineStartX} ${y} L ${item.lineEndX} ${y}`,
-    );
-    openEndRef.current?.setAttribute("cy", `${y}`);
-  });
-  return (
-    <g
-      ref={registerElement}
-      className={`timeline-file-segment${
-        anchored ? " is-anchor-tied" : ""
-      }`}
-      style={{ "--file-color": item.color } as CSSProperties}
-      role="button"
-      tabIndex={0}
-      aria-pressed={false}
-      aria-label={`Intent lifeline ${span.path}; select its source lineage and later influence`}
-      data-timeline-selection-key={selectionKey}
-      onClick={() => onActivate(span, "timeline")}
-      onFocus={() => onHover(target)}
-      onBlur={() => onHover(undefined)}
-      onMouseEnter={() => onHover(target)}
-      onMouseLeave={() => onHover(undefined)}
-      onKeyDown={(event) =>
-        handleTimelineKey(event, () => onActivate(span, "timeline"))
-      }
-    >
-      <rect
-        ref={hitRef}
-        className="timeline-file-segment__hit"
-        {...item.hitRegion}
-      />
-      <path
-        ref={lineRef}
-        className="timeline-file-segment__line"
-        d={item.linePath}
-      />
-      {item.open ? (
-        <circle
-          ref={openEndRef}
-          className="timeline-file-segment__open-end"
-          cx={timelineXForColumn(span.endColumn) - TIMELINE_JUNCTION_GAP}
-          cy={timelineYForLane(span.lane)}
-          r="4"
-        />
-      ) : null}
-    </g>
-  );
-});
-
-const TimelineConnectorGlyph = memo(function TimelineConnectorGlyph({
-  item,
-  anchored,
-  onActivate,
-  onHover,
-}: {
-  item: TimelineConnectorRenderItem;
-  anchored: boolean;
-  onActivate: TimelineIntentInteraction;
-  onHover: TimelineTargetInteraction;
-}) {
-  const { connector } = item;
-  const span = item.span;
-  const hitRef = useRef<SVGPathElement>(null);
-  const lineRef = useRef<SVGPathElement>(null);
-  useTimelineReorderAnimation(
-    [item.laneY, item.junctionY],
-    ([laneY, junctionY]) => {
-      if (laneY === undefined || junctionY === undefined) return;
-      const pathData = connectorPathAtY(
-        item.connector,
-        timelineXForColumn,
-        laneY,
-        junctionY,
-      );
-      hitRef.current?.setAttribute("d", pathData);
-      lineRef.current?.setAttribute("d", pathData);
-    },
-  );
-  return (
-    <g
-      className={`timeline-intent-connector${
-        anchored ? " is-anchor-tied" : ""
-      }`}
-      style={{ "--file-color": item.color } as CSSProperties}
-      onClick={
-        span
-          ? () => onActivate(span, "timeline")
-          : undefined
-      }
-      onMouseEnter={
-        item.target ? () => onHover(item.target) : undefined
-      }
-      onMouseLeave={() => onHover(undefined)}
-    >
-      <path
-        ref={hitRef}
-        className="timeline-intent-connector__hit"
-        d={item.pathData}
-      />
-      <path
-        ref={lineRef}
-        className="timeline-file-segment__line"
-        d={item.pathData}
-      />
-    </g>
-  );
-});
-
-const TimelineEventGlyph = memo(function TimelineEventGlyph({
-  item,
-  foldBoundary,
-  foldSelecting,
-  onElement,
-  onSelect,
-  onHover,
-}: {
-  item: TimelineEventRenderItem;
-  foldBoundary: boolean;
-  foldSelecting: boolean;
-  onElement: TimelineSelectableElementRegistrar;
-  onSelect: (target: Extract<TimelineSelectionTarget, { kind: "event" }>) => void;
-  onHover: TimelineTargetInteraction;
-}) {
-  const selectEvent = () => onSelect(item.target);
-  const selectionKey = timelineSelectionTargetKey(item.target) ?? item.marker.id;
-  const folded = Boolean(item.marker.foldRange);
-  const grouped = !folded && item.marker.events.length > 1;
-  const collected = folded || grouped;
-  const markerLabel = timelineEventMarkerLabel(item.marker);
-  const markerRef = useRef<SVGGElement>(null);
-  const registerElement = useCallback(
-    (element: SVGGElement | null) => {
-      markerRef.current = element;
-      onElement(selectionKey, element);
-    },
-    [onElement, selectionKey],
-  );
-  useTimelineReorderAnimation([item.y], ([y]) => {
-    if (y === undefined) return;
-    markerRef.current?.setAttribute(
-      "transform",
-      `translate(${item.x} ${y})`,
-    );
-  });
-  return (
-    <g
-      ref={registerElement}
-      className={`timeline-event-marker${grouped ? " is-grouped" : ""}${
-        folded ? " is-folded" : ""
-      }${foldBoundary ? " is-fold-boundary" : ""}${
-        foldSelecting ? " is-fold-selectable" : ""
-      }`}
-      role="button"
-      tabIndex={0}
-      aria-pressed={false}
-      aria-label={
-        folded
-          ? `${markerLabel}, folded region containing ${
-              item.marker.events.length
-            } original events: ${item.marker.events
-              .map((event) => event.name)
-              .join("; ")}`
-          : grouped
-          ? `${markerLabel}, ${
-              item.marker.events.length
-            } events sharing the same ordered predecessor and successor files: ${item.marker.events
-              .map((event) => event.name)
-              .join("; ")}`
-          : `${markerLabel}: ${item.marker.event.name}`
-      }
-      onClick={selectEvent}
-      onFocus={() => onHover(item.target)}
-      onBlur={() => onHover(undefined)}
-      onMouseEnter={() => onHover(item.target)}
-      onMouseLeave={() => onHover(undefined)}
-      onKeyDown={(event) => handleTimelineKey(event, selectEvent)}
-      transform={item.transform}
-      data-timeline-fold-range={
-        item.marker.foldRange
-          ? timelineFoldRangeKey(item.marker.foldRange)
-          : undefined
-      }
-      data-timeline-selection-key={selectionKey}
-    >
-      <circle className="timeline-event-marker__hit" r={collected ? 11 : 9} />
-      <circle className="timeline-event-marker__ring" r={collected ? 6.5 : 5.5} />
-      {collected ? (
-        <text
-          className="timeline-event-marker__count"
-          y="2.1"
-          textAnchor="middle"
-        >
-          {item.marker.events.length}
-        </text>
-      ) : (
-        <circle className="timeline-event-marker__dot" r="2.75" />
-      )}
-      <text className="timeline-event-marker__label" y="-10" textAnchor="middle">
-        {markerLabel}
-      </text>
-    </g>
-  );
-});
-
-const TimelineBaseLifelines = memo(function TimelineBaseLifelines({
-  renderData,
-  anchoredPaths,
-  onElement,
-  onActivate,
-  onHover,
-}: {
-  renderData: TimelineRenderData;
-  anchoredPaths: ReadonlySet<string>;
-  onElement: TimelineSelectableElementRegistrar;
-  onActivate: TimelineIntentInteraction;
-  onHover: TimelineTargetInteraction;
-}) {
-  return (
-    <>
-      {renderData.spans.map((item) => (
-        <TimelineSpanGlyph
-          key={item.span.id}
-          item={item}
-          anchored={anchoredPaths.has(item.span.path)}
-          onElement={onElement}
-          onActivate={onActivate}
-          onHover={onHover}
-        />
-      ))}
-      {renderData.connectors.map((item) => (
-        <TimelineConnectorGlyph
-          key={item.connector.id}
-          item={item}
-          anchored={anchoredPaths.has(item.connector.path)}
-          onActivate={onActivate}
-          onHover={onHover}
-        />
-      ))}
-    </>
-  );
-});
-
-const TimelineBaseEvents = memo(function TimelineBaseEvents({
-  renderData,
-  foldBoundaryKey,
-  foldSelecting,
-  onElement,
-  onSelect,
-  onHover,
-}: {
-  renderData: TimelineRenderData;
-  foldBoundaryKey?: string;
-  foldSelecting: boolean;
-  onElement: TimelineSelectableElementRegistrar;
-  onSelect: (target: Extract<TimelineSelectionTarget, { kind: "event" }>) => void;
-  onHover: TimelineTargetInteraction;
-}) {
-  return (
-    <>
-      {renderData.events.map((item) => (
-        <TimelineEventGlyph
-          key={item.marker.id}
-          item={item}
-          foldBoundary={
-            foldBoundaryKey === timelineFoldRangeKey(item.marker)
-          }
-          foldSelecting={foldSelecting}
-          onElement={onElement}
-          onSelect={onSelect}
-          onHover={onHover}
-        />
-      ))}
-    </>
-  );
-});
-
-const TimelineSelectionOverlayGlyph = memo(
-  function TimelineSelectionOverlayGlyph({
-    renderData,
-    trace,
-    target,
-  }: {
-    renderData: TimelineRenderData;
-    trace: TimelineSelectionTrace;
-    target: TimelineSelectionTarget | undefined;
-  }) {
-    const overlay = useMemo(
-      () => buildTimelineSelectionOverlay(renderData, trace, target),
-      [renderData, target, trace],
-    );
-    const targetKey = timelineSelectionTargetKey(target);
-    if (!targetKey) return null;
-
-    return (
-      <g
-        className="timeline-selection-overlay"
-        aria-hidden="true"
-        data-timeline-selection-target={targetKey}
-        data-active-spans={overlay.activeSpanCount}
-        data-active-connectors={overlay.activeConnectorCount}
-        data-active-events={overlay.activeEventCount}
-        data-draw-paths={
-          overlay.spanPaths.length + overlay.connectorPaths.length
-        }
-      >
-        {overlay.spanPaths.map((path) => (
-          <path
-            key={`span:${path.color}`}
-            className="timeline-selection-overlay__span"
-            d={path.pathData}
-            style={{ color: path.color }}
-            data-members={path.memberCount}
-          />
-        ))}
-        {overlay.connectorPaths.map((path) => (
-          <path
-            key={`connector:${path.color}`}
-            className="timeline-selection-overlay__connector"
-            d={path.pathData}
-            style={{ color: path.color }}
-            data-members={path.memberCount}
-          />
-        ))}
-        {overlay.openEnds.map((end) => (
-          <circle
-            key={end.id}
-            className="timeline-selection-overlay__open-end"
-            cx={end.cx}
-            cy={end.cy}
-            r="4"
-            style={{ color: end.color }}
-          />
-        ))}
-        {overlay.primarySpan ? (
-          <path
-            className="timeline-selection-overlay__primary-span"
-            d={overlay.primarySpan.pathData}
-            style={{ color: overlay.primarySpan.color }}
-          />
-        ) : null}
-        {overlay.events.map(({ marker, transform, primary }) => {
-          const folded = Boolean(marker.foldRange);
-          const grouped = !folded && marker.events.length > 1;
-          const collected = folded || grouped;
-          return (
-            <g
-              key={marker.id}
-              className={`timeline-selection-overlay__event${
-                primary ? " is-primary" : ""
-              }${folded ? " is-folded" : ""}`}
-              transform={transform}
-            >
-              <circle
-                className="timeline-selection-overlay__event-ring"
-                r={collected ? 6.5 : 5.5}
-              />
-              {collected ? (
-                <text
-                  className="timeline-selection-overlay__event-count"
-                  y="2.1"
-                  textAnchor="middle"
-                >
-                  {marker.events.length}
-                </text>
-              ) : (
-                <circle
-                  className="timeline-selection-overlay__event-dot"
-                  r="2.75"
-                />
-              )}
-              <text y="-10" textAnchor="middle">
-                {timelineEventMarkerLabel(marker)}
-              </text>
-            </g>
-          );
-        })}
-      </g>
-    );
-  },
-);
-
-const TimelineAnchorTieGlyph = memo(function TimelineAnchorTieGlyph({
-  x,
-  points,
-}: {
-  x: number;
-  points: ReadonlyArray<{ path: string; y: number }>;
-}) {
-  const bracketRef = useRef<SVGPathElement>(null);
-  const circleRefs = useRef(new Map<string, SVGCircleElement>());
-  useTimelineReorderAnimation(
-    [x, ...points.map((point) => point.y)],
-    ([animatedX, ...animatedYs]) => {
-      if (animatedX === undefined) return;
-      if (bracketRef.current && animatedYs.length > 1) {
-        const minimumY = Math.min(...animatedYs);
-        const maximumY = Math.max(...animatedYs);
-        bracketRef.current.setAttribute(
-          "d",
-          `M ${animatedX + 6} ${minimumY} h 8 M ${
-            animatedX + 6
-          } ${minimumY} V ${maximumY} M ${
-            animatedX + 6
-          } ${maximumY} h 8`,
-        );
-      }
-      points.forEach((point, index) => {
-        const circle = circleRefs.current.get(point.path);
-        const y = animatedYs[index];
-        if (!circle || y === undefined) return;
-        circle.setAttribute("cx", `${animatedX + 14}`);
-        circle.setAttribute("cy", `${y}`);
-      });
-    },
-  );
-
-  const pointYs = points.map((point) => point.y);
-  const minimumY = Math.min(...pointYs);
-  const maximumY = Math.max(...pointYs);
-  return (
-    <g className="timeline-anchor-tie" aria-hidden="true">
-      {points.length > 1 ? (
-        <path
-          ref={bracketRef}
-          d={`M ${x + 6} ${minimumY} h 8 M ${x + 6} ${minimumY} V ${
-            maximumY
-          } M ${x + 6} ${maximumY} h 8`}
-        />
-      ) : null}
-      {points.map((point) => (
-        <circle
-          key={`anchor-tie:${point.path}`}
-          ref={(element) => {
-            if (element) circleRefs.current.set(point.path, element);
-            else circleRefs.current.delete(point.path);
-          }}
-          cx={x + 14}
-          cy={point.y}
-          r={2.8}
-        />
-      ))}
-    </g>
-  );
-});
-
-const TimelineCommitStrip = memo(function TimelineCommitStrip({
-  commits, positions, selectedHash, onSelect,
-}: {
-  commits: TimelineCommit[];
-  positions: TimelineCommitTickPosition[];
-  selectedHash?: string;
-  onSelect: (commit: string) => void;
-}) {
-  const groups = useMemo(() => timelineCommitTickGroups(positions), [positions]);
-  const selectedIndex = useMemo(() => commits.findIndex((entry) => entry.commit === selectedHash), [commits, selectedHash]);
-  return (
-    <g className="timeline-commit-strip" role="group"
-      aria-label={`${commits.length} Git commits in ${groups.length} display markers; all commits available in the inspector`}>
-      {groups.map(({ first, last, x }) => {
-        const selected = selectedIndex >= first && selectedIndex <= last;
-        const index = selected ? selectedIndex : first;
-        const entry = commits[index];
-        if (!entry) return null;
-        const select = () => onSelect(entry.commit);
-        const label = first === last
-          ? `Git commit ${first + 1} of ${commits.length}: ${entry.commit}`
-          : `Git commits ${first + 1}–${last + 1} of ${commits.length}; browse ${last - first + 1} commits`;
-        return (
-          <g className={`timeline-commit-tick${selected ? " is-selected" : ""}`}
-            key={first} role="button" tabIndex={0} aria-pressed={selected} aria-label={label}
-            data-commit-count={last - first + 1}
-            transform={`translate(${selected ? positions[index].x : x} 0)`}
-            onClick={select} onKeyDown={(event) => handleTimelineKey(event, select)}>
-            <title>{label}</title>
-            <rect className="timeline-commit-tick__hit" x="-4" y="1" width="8" height="16" />
-            <line className="timeline-commit-tick__mark" x1="0" x2="0"
-              y1={selected ? 2 : 5} y2={selected ? 16 : 12} />
-          </g>
-        );
-      })}
-    </g>
-  );
-});
-
-const TimelineGuides = memo(function TimelineGuides({
-  events,
-  height,
-  presentX,
-}: {
-  events: TimelineEventMarker[];
-  height: number;
-  presentX: number;
-}) {
-  return (
-    <>
-      {events.map((marker) => {
-        const x = timelineXForColumn(marker.column);
-        return (
-          <g className="timeline-revision" key={`guide:${marker.id}`}>
-            <line x1={x} x2={x} y1="18" y2={height - 25} />
-            <text x={x} y={height - 10} textAnchor="middle">
-              {timelineEventMarkerLabel(marker)}
-            </text>
-          </g>
-        );
-      })}
-      <g className="timeline-revision is-current">
-        <line x1={presentX} x2={presentX} y1="18" y2={height - 25} />
-        <text x={presentX} y={height - 10} textAnchor="middle">
-          present
-        </text>
-      </g>
-    </>
-  );
-});
-
-export function TimelineView({
-  historyLoading,
-  historyError,
-  onRetryHistory,
-  graph,
-  anchorTimeline,
-  commits,
-  panelLayout,
-  foldRanges,
-  foldSelection,
-  selectedFoldRange,
-  protectedEventBoundaries,
-  foldNotice,
-  onPanelLayoutChange,
-  onFoldEndpoint,
-  onSelectedFoldRangeChange,
-  onSelect: onSelectDocument,
-  onClose,
-}: TimelineViewProps) {
-  const currentPaths = useMemo(() => new Map(graph.documents.map(document => [document.component, document.path])), [graph.documents]);
-  const displayPaths = useMemo(() => new Map([
-    ...Object.entries(graph.historical_components).map(([id, record]) => [id, record.path] as const),
-    ...currentPaths,
-  ]), [currentPaths, graph.historical_components]);
-  const onSelect = useCallback<ReaderDocumentActivation>((identityOrPath, mode) => {
-    onSelectDocument(currentPaths.get(identityOrPath) ?? identityOrPath, mode);
-  }, [currentPaths, onSelectDocument]);
-  const timelineWorkspaceRef = useRef<HTMLElement>(null);
-  const timelineCanvasScrollRef = useRef<HTMLDivElement>(null);
-  const timelineHoverOverlayRef = useRef<SVGGElement>(null);
-  const timelineHoverSpanOverlayRef = useRef<SVGPathElement>(null);
-  const timelineHoverOpenEndOverlayRef = useRef<SVGCircleElement>(null);
-  const timelineHoverConnectorOverlayRefs = [
-    useRef<SVGPathElement>(null),
-    useRef<SVGPathElement>(null),
-  ] as const;
-  const timelineHoverEventOverlayRefs = [
-    useRef<SVGGElement>(null),
-    useRef<SVGGElement>(null),
-  ] as const;
-  const timelineSelectableElementsRef = useRef(
-    new Map<string, SVGGElement>(),
-  );
-  const appliedTimelineSelectionElementRef =
-    useRef<SVGGElement | undefined>(undefined);
-  const appliedTimelineHoverKeyRef = useRef<string | undefined>(undefined);
-  const pendingTimelineHoverTargetRef =
-    useRef<TimelineSelectionTarget | undefined>(undefined);
-  const timelineHoverFrameRef = useRef<number | undefined>(undefined);
-  const timelineFocusFrameRef = useRef<number | undefined>(undefined);
-  const timelineScrollInitializedRef = useRef(false);
-  const entryRailResizeRef = useRef<TimelineRailResizeInteraction | undefined>(
-    undefined,
-  );
-  const entryRailWidthRef = useRef(TIMELINE_ENTRY_RAIL_DEFAULT_WIDTH);
-  const panelResizeRef = useRef<TimelinePanelResizeInteraction | undefined>(
-    undefined,
-  );
-  const panelResizeCleanupRef = useRef<(() => void) | undefined>(undefined);
-  const registerTimelineSelectableElement =
-    useCallback<TimelineSelectableElementRegistrar>((key, element) => {
-      if (element) timelineSelectableElementsRef.current.set(key, element);
-      else timelineSelectableElementsRef.current.delete(key);
-    }, []);
-  const [entryRailWidth, setEntryRailWidth] = useState(
-    TIMELINE_ENTRY_RAIL_DEFAULT_WIDTH,
-  );
-  const [selectedAnchorName, setSelectedAnchorName] = useState<string>();
-  const [selectedCommitHash, setSelectedCommitHash] = useState<string>();
-  const [timelineViewportWidth, setTimelineViewportWidth] = useState(0);
-  const [focusedEventBoundary, setFocusedEventBoundary] = useState(
-    graph.events.length,
-  );
-  const timelineLeadingInset = timelineLeadingScrollInset(
-    timelineViewportWidth,
-    TIMELINE_HORIZONTAL_PADDING,
-  );
-  const selectedAnchor = selectedAnchorName
-    ? graph.anchors[selectedAnchorName]
-    : undefined;
-  const selectedCommit = selectedCommitHash
-    ? commits.find((entry) => entry.commit === selectedCommitHash)
-    : undefined;
-  const selectedAnchorTargets = useMemo(
-    () => selectedAnchor ? timelineIdentitiesForPaths(graph, selectedAnchor.connections.map(connection => connection.target)) : undefined,
-    [graph, selectedAnchor],
-  );
-  const presentationTopology = useMemo(
-    () =>
-      buildTimelinePresentationTopology(
-        graph.events,
-        selectedAnchorTargets,
-        protectedEventBoundaries,
-        foldRanges,
-      ),
-    [
-      foldRanges,
-      graph.events,
-      protectedEventBoundaries,
-      selectedAnchorTargets,
-    ],
-  );
-  const focusBoundaryStops = useMemo(
-    () =>
-      presentationTopology.focusBoundaryStops.map((stop) => ({
-        x: timelineXForColumn(stop.column),
-        eventBoundary: stop.eventBoundary,
-      })),
-    [presentationTopology],
-  );
-  const effectiveFocusedEventBoundary = Math.max(
-    0,
-    Math.min(graph.events.length, focusedEventBoundary),
-  );
-  const presentation = useMemo(
-    () =>
-      buildTimelinePresentationFromTopology(
-        presentationTopology,
-        effectiveFocusedEventBoundary,
-      ),
-    [effectiveFocusedEventBoundary, presentationTopology],
-  );
-  const visibleFocusedEventBoundary =
-    presentation.focusedSlice?.eventBoundary ?? effectiveFocusedEventBoundary;
-  const updateFocusedSlice = useCallback(() => {
-    const scrollContainer = timelineCanvasScrollRef.current;
-    if (!scrollContainer || !timelineScrollInitializedRef.current) return;
-    if (scrollContainer.clientWidth <= 0) return;
-    const nextBoundary = timelineFocusedEventBoundaryAtCanvasOrigin(
-      focusBoundaryStops,
-      scrollContainer.scrollLeft,
-      scrollContainer.clientWidth,
-      TIMELINE_HORIZONTAL_PADDING,
-    );
-    setFocusedEventBoundary((current) =>
-      current === nextBoundary ? current : nextBoundary,
-    );
-  }, [focusBoundaryStops]);
+function RetiringFileLabel({file, onSelect}: {file: RetiringOpeningFile; onSelect: (mode: ReaderNavigationMode) => void}) {
+  const ref = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
-    const scrollContainer = timelineCanvasScrollRef.current;
-    if (!scrollContainer) return;
-    const measureViewport = () => {
-      const nextWidth = Math.max(
-        0,
-        Math.round(scrollContainer.clientWidth * 10) / 10,
-      );
-      setTimelineViewportWidth((current) =>
-        current === nextWidth ? current : nextWidth,
-      );
-    };
-    measureViewport();
-    const resizeObserver = new ResizeObserver(measureViewport);
-    resizeObserver.observe(scrollContainer);
-    return () => resizeObserver.disconnect();
-  }, []);
-  useLayoutEffect(() => {
-    const scrollContainer = timelineCanvasScrollRef.current;
-    if (!scrollContainer) return;
-    if (timelineScrollInitializedRef.current) return;
-    const measuredInset = timelineLeadingScrollInset(
-      scrollContainer.clientWidth,
-      TIMELINE_HORIZONTAL_PADDING,
-    );
-    if (Math.abs(measuredInset - timelineLeadingInset) > 0.5) return;
-
-    const nextScrollLeft = timelineScrollLeftForLeadingInset(
-      scrollContainer.scrollLeft,
-      timelineLeadingInset,
-      timelineScrollInitializedRef.current,
-    );
-    if (Math.abs(nextScrollLeft - scrollContainer.scrollLeft) > 0.5) {
-      scrollContainer.scrollLeft = nextScrollLeft;
-    }
-    timelineScrollInitializedRef.current = true;
-    updateFocusedSlice();
-  }, [timelineLeadingInset, updateFocusedSlice]);
-
-  useLayoutEffect(() => {
-    const scrollContainer = timelineCanvasScrollRef.current;
-    if (!scrollContainer) return;
-    const scheduleFocusedSliceUpdate = () => {
-      if (timelineFocusFrameRef.current !== undefined) return;
-      timelineFocusFrameRef.current = window.requestAnimationFrame(() => {
-        timelineFocusFrameRef.current = undefined;
-        updateFocusedSlice();
-      });
-    };
-
-    updateFocusedSlice();
-    scrollContainer.addEventListener("scroll", scheduleFocusedSliceUpdate, {
-      passive: true,
-    });
-    return () => {
-      scrollContainer.removeEventListener(
-        "scroll",
-        scheduleFocusedSliceUpdate,
-      );
-      if (timelineFocusFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(timelineFocusFrameRef.current);
-        timelineFocusFrameRef.current = undefined;
-      }
-    };
-  }, [updateFocusedSlice]);
-  const selectionResolver = useMemo(
-    () => createTimelineSelectionResolver(presentation),
-    [presentation],
-  );
-  const renderData = useMemo<TimelineRenderData>(() => {
-    const colorByPath = new Map(
-      presentation.paths.map((path) => [
-        path,
-        relationshipStyle(`intent:${path}`).color,
-      ]),
-    );
-    const laneByPath = new Map<string, number>();
-    for (const span of presentation.spans) laneByPath.set(span.path, span.lane);
-    for (const span of timelineFocusedIntentSpans(presentation)) {
-      laneByPath.set(span.path, span.lane);
-    }
-    for (const retirement of timelineFocusedRetirements(presentation)) {
-      if (retirement.span) {
-        laneByPath.set(retirement.path, retirement.span.lane);
-      }
-    }
-    const eventById = new Map(
-      presentation.events.map((marker) => [marker.id, marker]),
-    );
-    const spanById = new Map(
-      presentation.spans.map((span) => [span.id, span]),
-    );
-    const targetBySpanId = new Map<
-      string,
-      Extract<TimelineSelectionTarget, { kind: "intent" }>
-    >();
-    const spans = presentation.spans.map((span) => {
-      const startX =
-        timelineXForColumn(span.startColumn) + TIMELINE_JUNCTION_GAP;
-      const endX =
-        timelineXForColumn(span.endColumn) - TIMELINE_JUNCTION_GAP;
-      const y = timelineYForLane(span.lane);
-      const laneHitRegion = timelineLaneHitRegion(span.lane);
-      const target = {
-        kind: "intent" as const,
-        path: span.path,
-        spanId: span.id,
-      };
-      targetBySpanId.set(span.id, target);
-      return {
-        span,
-        target,
-        hitRegion: {
-          x: startX,
-          y: laneHitRegion.y,
-          width: endX - startX,
-          height: laneHitRegion.height,
-        },
-        linePath: `M ${startX} ${y} L ${endX} ${y}`,
-        lineStartX: startX,
-        lineEndX: endX,
-        y,
-        color: colorByPath.get(span.path) ?? "currentColor",
-        open: span.endColumn === presentation.columnCount - 1,
-      };
-    });
-    const connectors = presentation.connectors.map((connector) => {
-      const span = connector.spanId
-        ? spanById.get(connector.spanId)
-        : undefined;
-      const laneY = timelineYForLane(connector.lane);
-      const junctionY = timelineYForLane(connector.junctionLane);
-      return {
-        connector,
-        pathData: connectorPathAtY(
-          connector,
-          timelineXForColumn,
-          laneY,
-          junctionY,
-        ),
-        laneY,
-        junctionY,
-        color: colorByPath.get(connector.path) ?? "currentColor",
-        span,
-        target: span ? targetBySpanId.get(span.id) : undefined,
-      };
-    });
-    const events = presentation.events.map((marker) => {
-      const x = timelineXForColumn(marker.column);
-      const y = timelineYForLane(marker.junctionLane);
-      return {
-        marker,
-        transform: `translate(${x} ${y})`,
-        x,
-        y,
-        target: { kind: "event" as const, eventId: marker.id },
-      };
-    });
-    const spanRenderById = new Map(spans.map((item) => [item.span.id, item]));
-    const connectorRenderById = new Map(
-      connectors.map((item) => [item.connector.id, item]),
-    );
-    const eventRenderById = new Map(
-      events.map((item) => [item.marker.id, item]),
-    );
-    return {
-      spans,
-      connectors,
-      events,
-      spanRenderById,
-      connectorRenderById,
-      eventRenderById,
-      eventById,
-      spanById,
-      targetBySpanId,
-      colorByPath,
-      laneByPath,
-    };
-  }, [presentation]);
-  const timelineReorderKey = presentation.paths
-    .map((path) => `${path}:${renderData.laneByPath.get(path) ?? ""}`)
-    .join("\u0000");
-  const timelineReorderStartedAt = useMemo(
-    () => performance.now(),
-    [timelineReorderKey],
-  );
-  const currentLaneYByPath = useMemo(
-    () =>
-      new Map(
-        [...renderData.laneByPath].map(([path, lane]) => [
-          path,
-          timelineYForLane(lane),
-        ]),
-      ),
-    [renderData.laneByPath],
-  );
-  const committedLaneYByPathRef = useRef(currentLaneYByPath);
-  const initialEntryYByPath = committedLaneYByPathRef.current;
-  useLayoutEffect(() => {
-    committedLaneYByPathRef.current = currentLaneYByPath;
-  }, [currentLaneYByPath]);
-  const [selectedTarget, setSelectedTarget] =
-    useState<TimelineSelectionTarget>();
-  const fallbackTarget = useMemo<TimelineSelectionTarget | undefined>(
-    () =>
-      presentation.events[0]
-        ? { kind: "event", eventId: presentation.events[0].id }
-        : undefined,
-    [presentation.events],
-  );
-  const selectedFoldMarker = selectedFoldRange
-    ? presentation.events.find(
-        (marker) =>
-          marker.foldRange &&
-          timelineFoldRangeKey(marker.foldRange) ===
-            timelineFoldRangeKey(selectedFoldRange),
-      )
-    : undefined;
-  const selectedFoldTarget: TimelineSelectionTarget | undefined =
-    selectedFoldMarker
-      ? { kind: "event", eventId: selectedFoldMarker.id }
-      : undefined;
-  useLayoutEffect(() => {
-    if (!selectedFoldMarker) return;
-    const scrollContainer = timelineCanvasScrollRef.current;
-    if (!scrollContainer) return;
-    scrollContainer.scrollTo({
-      left: centeredTimelineScrollLeft(
-        timelineXForColumn(selectedFoldMarker.column) + timelineLeadingInset,
-        scrollContainer.clientWidth,
-        scrollContainer.scrollWidth,
-      ),
-      behavior: "auto",
-    });
-  }, [selectedFoldMarker?.id, timelineLeadingInset]);
-  const selectedTargetIsValid = selectedTarget
-    ? selectedTarget.kind === "event"
-      ? renderData.eventById.has(selectedTarget.eventId)
-      : renderData.spanById.get(selectedTarget.spanId)?.path ===
-        selectedTarget.path
-    : false;
-  const stableSelectedTarget = foldSelection.active
-    ? undefined
-    : selectedFoldTarget
-      ? selectedFoldTarget
-      : selectedTargetIsValid
-        ? selectedTarget
-        : selectedAnchor || selectedCommit
-          ? undefined
-          : fallbackTarget;
-  const selectedTrace = useMemo(
-    () => selectionResolver.resolve(stableSelectedTarget),
-    [selectionResolver, stableSelectedTarget],
-  );
-  const stableSelectedTargetKey = timelineSelectionTargetKey(
-    stableSelectedTarget,
-  );
-  useLayoutEffect(() => {
-    const previous = appliedTimelineSelectionElementRef.current;
-    const next = stableSelectedTargetKey
-      ? timelineSelectableElementsRef.current.get(stableSelectedTargetKey)
-      : undefined;
-    if (previous && previous !== next) {
-      previous.setAttribute("aria-pressed", "false");
-    }
-    if (next) next.setAttribute("aria-pressed", "true");
-    appliedTimelineSelectionElementRef.current = next;
-  }, [renderData, stableSelectedTargetKey]);
-  const selectedEvent =
-    stableSelectedTarget?.kind === "event"
-      ? renderData.eventById.get(stableSelectedTarget.eventId)
-      : undefined;
-  const selectedIntentCandidate =
-    stableSelectedTarget?.kind === "intent"
-      ? renderData.spanById.get(stableSelectedTarget.spanId)
-      : undefined;
-  const selectedIntent =
-    stableSelectedTarget?.kind === "intent" &&
-    selectedIntentCandidate?.path === stableSelectedTarget.path
-      ? selectedIntentCandidate
-      : undefined;
-  const managedPaths = useMemo(
-    () => new Set(graph.documents.map((document) => document.component)),
-    [graph.documents],
-  );
-  const focusedIntentSpans = useMemo(
-    () => timelineFocusedIntentSpans(presentation),
-    [presentation],
-  );
-  const queuedRetirements = useTimelineRetirementQueue(
-    visibleFocusedEventBoundary,
-    presentation,
-    initialEntryYByPath,
-    currentLaneYByPath,
-    managedPaths,
-    renderData.colorByPath,
-  );
-  const timelineRailEntries = useMemo<TimelineRailEntry[]>(() => {
-    const entries: TimelineRailEntry[] = focusedIntentSpans.map((span) => ({
-      span,
-      managed: managedPaths.has(span.path),
-      color: renderData.colorByPath.get(span.path) ?? "currentColor",
-    }));
-    const focusedPaths = new Set(focusedIntentSpans.map((span) => span.path));
-    for (const entry of queuedRetirements) {
-      if (focusedPaths.has(entry.path) || !entry.span) continue;
-      entries.push({
-        span: entry.span,
-        managed: entry.managed,
-        color: entry.color,
-        initialY: entry.initialY,
-        retirementPhase: entry.phase,
-      });
-    }
-    return entries.sort(
-      (left, right) =>
-        left.span.lane - right.span.lane ||
-        left.span.path.localeCompare(right.span.path),
-    );
-  }, [
-    focusedIntentSpans,
-    managedPaths,
-    renderData.colorByPath,
-    queuedRetirements,
-  ]);
-  const anchorEntries = useMemo<TimelineAnchorEntry[]>(() => {
-    const sliceByName = new Map(
-      anchorTimeline.map((slice) => [slice.name, slice]),
-    );
-    return Object.entries(graph.anchors)
-      .map(([name, definition]) => ({
-        name,
-        definition,
-        slice: sliceByName.get(name),
-      }))
-      .sort((left, right) => {
-        const leftBoundary = left.slice?.event_boundary ?? Number.POSITIVE_INFINITY;
-        const rightBoundary = right.slice?.event_boundary ?? Number.POSITIVE_INFINITY;
-        return leftBoundary - rightBoundary || left.name.localeCompare(right.name);
-      });
-  }, [anchorTimeline, graph.anchors]);
-  const selectedAnchorSlice = selectedAnchorName
-    ? anchorEntries.find((entry) => entry.name === selectedAnchorName)?.slice
-    : undefined;
-  if (!entryRailResizeRef.current) entryRailWidthRef.current = entryRailWidth;
-  const availableTimelineWidth = useCallback(
-    () =>
-      timelineWorkspaceRef.current?.clientWidth ??
-      (typeof document === "undefined"
-        ? 780
-        : document.documentElement.clientWidth),
-    [],
-  );
-  const applyLiveEntryRailWidth = useCallback((width: number) => {
-    entryRailWidthRef.current = width;
-    timelineWorkspaceRef.current?.style.setProperty(
-      "--timeline-entry-rail-width",
-      `${width}px`,
-    );
-  }, []);
-  const beginEntryRailResize = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!event.isPrimary || event.button !== 0) return;
-      event.preventDefault();
-      event.currentTarget.focus({ preventScroll: true });
-      event.currentTarget.setPointerCapture(event.pointerId);
-      entryRailResizeRef.current = {
-        pointerId: event.pointerId,
-        captureTarget: event.currentTarget,
-        startClientX: event.clientX,
-        startWidth: entryRailWidthRef.current,
-        availableWidth: availableTimelineWidth(),
-      };
-    },
-    [availableTimelineWidth],
-  );
-  const moveEntryRailResize = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      const resize = entryRailResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
-      event.preventDefault();
-      applyLiveEntryRailWidth(
-        resizeTimelineEntryRail(
-          resize.startWidth,
-          event.clientX - resize.startClientX,
-          resize.availableWidth,
-        ),
-      );
-    },
-    [applyLiveEntryRailWidth],
-  );
-  const finishEntryRailResize = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      const resize = entryRailResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
-      entryRailResizeRef.current = undefined;
-      if (resize.captureTarget.hasPointerCapture(event.pointerId)) {
-        resize.captureTarget.releasePointerCapture(event.pointerId);
-      }
-      setEntryRailWidth(entryRailWidthRef.current);
-    },
-    [],
-  );
-  const resetEntryRailWidth = useCallback(() => {
-    entryRailResizeRef.current = undefined;
-    applyLiveEntryRailWidth(TIMELINE_ENTRY_RAIL_DEFAULT_WIDTH);
-    setEntryRailWidth(TIMELINE_ENTRY_RAIL_DEFAULT_WIDTH);
-  }, [applyLiveEntryRailWidth]);
-  const resizeEntryRailWithKeyboard = useCallback(
-    (event: KeyboardEvent<HTMLButtonElement>) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        resetEntryRailWidth();
-        return;
-      }
-      const step = event.shiftKey ? 32 : 8;
-      const horizontalMovement =
-        event.key === "ArrowLeft"
-          ? -step
-          : event.key === "ArrowRight"
-            ? step
-            : undefined;
-      if (horizontalMovement === undefined) return;
-      event.preventDefault();
-      const nextWidth = resizeTimelineEntryRail(
-        entryRailWidthRef.current,
-        horizontalMovement,
-        availableTimelineWidth(),
-      );
-      applyLiveEntryRailWidth(nextWidth);
-      setEntryRailWidth(nextWidth);
-    },
-    [
-      applyLiveEntryRailWidth,
-      availableTimelineWidth,
-      resetEntryRailWidth,
-    ],
-  );
-  const railResizeControl = useMemo<TimelineRailResizeControlProps>(
-    () => ({
-      width: entryRailWidth,
-      onPointerDown: beginEntryRailResize,
-      onKeyDown: resizeEntryRailWithKeyboard,
-      onReset: resetEntryRailWidth,
-    }),
-    [
-      beginEntryRailResize,
-      entryRailWidth,
-      resetEntryRailWidth,
-      resizeEntryRailWithKeyboard,
-    ],
-  );
-  const readPanelMetrics = useCallback((): TimelinePanelMetrics | undefined => {
-    const workspace = timelineWorkspaceRef.current;
-    const ordinary = workspace?.querySelector<HTMLElement>(".timeline-result");
-    const inspector = workspace?.querySelector<HTMLElement>(
-      ".timeline-inspector",
-    );
-    if (!workspace || !ordinary || !inspector) return undefined;
-    const declaredInterfaceScale = Number.parseFloat(
-      window
-        .getComputedStyle(workspace)
-        .getPropertyValue("--interface-scale"),
-    );
-    const clientToLocalY = timelinePanelClientToLocalScale(
-      workspace.clientHeight,
-      workspace.getBoundingClientRect().height,
-      declaredInterfaceScale,
-    );
-    return {
-      clientToLocalY,
-      sizes: {
-        ordinaryHeight: timelinePanelLocalLength(
-          ordinary.getBoundingClientRect().height,
-          clientToLocalY,
-        ),
-        inspectorHeight: timelinePanelLocalLength(
-          inspector.getBoundingClientRect().height,
-          clientToLocalY,
-        ),
-      },
-    };
-  }, []);
-  const applyLivePanelSizes = useCallback(
-    (_boundary: TimelinePanelBoundary, sizes: TimelinePanelSizes) => {
-      const workspace = timelineWorkspaceRef.current;
-      workspace?.style.setProperty(
-        "--timeline-inspector-panel-height",
-        `${sizes.inspectorHeight}px`,
-      );
-    },
-    [],
-  );
-  const restoreCommittedPanelStyles = useCallback(() => {
-    const workspace = timelineWorkspaceRef.current;
-    if (!workspace) return;
-    if (panelLayout.inspectorHeight === undefined) {
-      workspace.style.removeProperty("--timeline-inspector-panel-height");
-    } else {
-      workspace.style.setProperty(
-        "--timeline-inspector-panel-height",
-        `${panelLayout.inspectorHeight}px`,
-      );
-    }
-  }, [panelLayout.inspectorHeight]);
-  const commitPanelSizes = useCallback(
-    (_boundary: TimelinePanelBoundary, sizes: TimelinePanelSizes) => {
-      onPanelLayoutChange({
-        inspectorHeight: sizes.inspectorHeight,
-      });
-    },
-    [onPanelLayoutChange],
-  );
-  const movePanelResize = useCallback(
-    (event: PointerEvent) => {
-      const resize = panelResizeRef.current;
-      if (!resize || resize.pointerId !== event.pointerId) return;
-      const movement = timelinePanelDragMovement(
-        resize.startClientY,
-        event.clientY,
-        resize.clientToLocalY,
-        resize.engaged,
-      );
-      if (movement === undefined) return;
-      event.preventDefault();
-      resize.engaged = true;
-      resize.latestSizes = resizeTimelinePanels(
-        resize.startSizes,
-        resize.boundary,
-        movement,
-      );
-      applyLivePanelSizes(resize.boundary, resize.latestSizes);
-    },
-    [applyLivePanelSizes],
-  );
-  const finishPanelResize = useCallback(
-    (pointerId: number, cancelled = false) => {
-      const resize = panelResizeRef.current;
-      if (!resize || resize.pointerId !== pointerId) return;
-      panelResizeCleanupRef.current?.();
-      panelResizeCleanupRef.current = undefined;
-      panelResizeRef.current = undefined;
-      timelineWorkspaceRef.current?.removeAttribute(
-        "data-timeline-panel-resizing",
-      );
-      releaseTimelinePanelPointerCapture(resize);
-      if (cancelled) {
-        restoreCommittedPanelStyles();
-        return;
-      }
-      if (!resize.engaged) return;
-      const changed =
-        Math.abs(
-          resize.latestSizes.ordinaryHeight -
-            resize.startSizes.ordinaryHeight,
-        ) >= 0.05;
-      if (!changed) {
-        restoreCommittedPanelStyles();
-        return;
-      }
-      commitPanelSizes(resize.boundary, resize.latestSizes);
-    },
-    [commitPanelSizes, restoreCommittedPanelStyles],
-  );
-  const beginPanelResize = useCallback(
-    (boundary: TimelinePanelBoundary) =>
-      (event: ReactPointerEvent<HTMLButtonElement>) => {
-        if (
-          !event.isPrimary ||
-          event.button !== 0 ||
-          panelResizeRef.current
-        ) {
-          return;
-        }
-        const metrics = readPanelMetrics();
-        if (!metrics) return;
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.focus({ preventScroll: true });
-        panelResizeRef.current = {
-          pointerId: event.pointerId,
-          captureTarget: event.currentTarget,
-          boundary,
-          startClientY: event.clientY,
-          clientToLocalY: metrics.clientToLocalY,
-          startSizes: metrics.sizes,
-          latestSizes: metrics.sizes,
-          engaged: false,
-        };
-        timelineWorkspaceRef.current?.setAttribute(
-          "data-timeline-panel-resizing",
-          boundary,
-        );
-        const pointerId = event.pointerId;
-        const move = (pointerEvent: PointerEvent) =>
-          movePanelResize(pointerEvent);
-        const finish = (pointerEvent: PointerEvent) =>
-          finishPanelResize(pointerEvent.pointerId);
-        const cancel = (pointerEvent: PointerEvent) =>
-          finishPanelResize(pointerEvent.pointerId, true);
-        const cancelOnBlur = () => finishPanelResize(pointerId, true);
-        const cleanup = () => {
-          window.removeEventListener("pointermove", move, true);
-          window.removeEventListener("pointerup", finish, true);
-          window.removeEventListener("pointercancel", cancel, true);
-          window.removeEventListener("blur", cancelOnBlur);
-        };
-        panelResizeCleanupRef.current = cleanup;
-        window.addEventListener("pointermove", move, true);
-        window.addEventListener("pointerup", finish, true);
-        window.addEventListener("pointercancel", cancel, true);
-        window.addEventListener("blur", cancelOnBlur);
-        try {
-          event.currentTarget.setPointerCapture(pointerId);
-        } catch {
-          // Window listeners retain drag ownership on engines without capture.
-        }
-      },
-    [finishPanelResize, movePanelResize, readPanelMetrics],
-  );
-  const resetPanelLayout = useCallback(() => {
-    const resize = panelResizeRef.current;
-    panelResizeCleanupRef.current?.();
-    panelResizeCleanupRef.current = undefined;
-    panelResizeRef.current = undefined;
-    releaseTimelinePanelPointerCapture(resize);
-    const workspace = timelineWorkspaceRef.current;
-    workspace?.removeAttribute("data-timeline-panel-resizing");
-    workspace?.style.removeProperty("--timeline-inspector-panel-height");
-    onPanelLayoutChange({});
-  }, [onPanelLayoutChange]);
-  useEffect(
-    () => () => {
-      panelResizeCleanupRef.current?.();
-      panelResizeCleanupRef.current = undefined;
-      const resize = panelResizeRef.current;
-      panelResizeRef.current = undefined;
-      releaseTimelinePanelPointerCapture(resize);
-    },
-    [],
-  );
-  const resizePanelWithKeyboard = useCallback(
-    (boundary: TimelinePanelBoundary) =>
-      (event: KeyboardEvent<HTMLButtonElement>) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          resetPanelLayout();
-          return;
-        }
-        const movement =
-          event.key === "ArrowUp"
-            ? -(event.shiftKey ? 36 : 12)
-            : event.key === "ArrowDown"
-              ? event.shiftKey
-                ? 36
-                : 12
-              : undefined;
-        if (movement === undefined) return;
-        const metrics = readPanelMetrics();
-        if (!metrics) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const sizes = resizeTimelinePanels(
-          metrics.sizes,
-          boundary,
-          movement,
-        );
-        applyLivePanelSizes(boundary, sizes);
-        commitPanelSizes(boundary, sizes);
-      },
-    [
-      applyLivePanelSizes,
-      commitPanelSizes,
-      readPanelMetrics,
-      resetPanelLayout,
-    ],
-  );
-  const dimensions = timelineDimensions(
-    presentation.columnCount,
-    presentation.laneCount,
-  );
-  const timelineCanvasRenderedWidth = Math.max(
-    dimensions.width,
-    timelineViewportWidth,
-  );
-  const xForColumn = timelineXForColumn;
-  const yForLane = timelineYForLane;
-  const presentX = xForColumn(presentation.columnCount - 1);
-  const commitEventBoundaryXs = useMemo(
-    () =>
-      Array.from({ length: graph.events.length + 1 }, (_, boundary) =>
-        commitEventBoundaryX(
-          boundary,
-          graph.events.length,
-          presentation.events,
-          xForColumn,
-        ),
-      ),
-    [graph.events.length, presentation.events],
-  );
-  const commitTickPositions = useMemo(() => {
-    const startX = xForColumn(-0.18);
-    return timelineCommitTickPositions(
-      commits.map((commit) => commit.event_boundary),
-      commitEventBoundaryXs,
-      startX,
-      Math.max(startX, presentX - 16),
-    );
-  }, [commitEventBoundaryXs, commits, presentX]);
-  const anchorPositions = useMemo(
-    () =>
-      new Map(
-        anchorEntries.map((entry) => [
-          entry.name,
-          timelineAnchorPosition(
-            anchorSliceX(
-              entry.slice?.event_boundary,
-              graph.events.length,
-              presentation.events,
-              timelineXForColumn,
-            ),
-            entry.definition.commit,
-            commits,
-            commitTickPositions,
-          ),
-        ]),
-      ),
-    [
-      anchorEntries,
-      graph.events.length,
-      presentation.events,
-      commits,
-      commitTickPositions,
-    ],
-  );
-  const selectedAnchorPosition = selectedAnchorName
-    ? anchorPositions.get(selectedAnchorName)
-    : undefined;
-  const selectedAnchorX = selectedAnchorPosition?.x;
-  const anchoredTimelinePaths = useMemo(() => {
-    if (!selectedAnchor) return [];
-    const timelinePaths = new Set(presentation.paths);
-    return timelineIdentitiesForPaths(graph, selectedAnchor.connections.map(connection => connection.target))
-      .filter(identity => timelinePaths.has(identity));
-  }, [graph, presentation.paths, selectedAnchor]);
-  const anchoredTimelinePathSet = useMemo(
-    () => new Set(anchoredTimelinePaths),
-    [anchoredTimelinePaths],
-  );
-  const selectedAnchorBoundary = selectedAnchorSlice?.event_boundary;
-  const anchorTiePoints =
-    selectedAnchorBoundary == null
-      ? []
-      : anchoredTimelinePaths.flatMap((path) => {
-          const span = timelineIntentSpanAtBoundary(
-            presentation,
-            path,
-            selectedAnchorBoundary,
-          );
-          return span ? [{ path, y: yForLane(span.lane) }] : [];
-        });
-  const clearTimelineHover = useCallback(() => {
-    setTimelineHoverPath(
-      timelineHoverSpanOverlayRef.current,
-      undefined,
-      undefined,
-    );
-    setTimelineHoverOpenEnd(timelineHoverOpenEndOverlayRef.current, undefined);
-    for (const ref of timelineHoverConnectorOverlayRefs) {
-      setTimelineHoverPath(ref.current, undefined, undefined);
-    }
-    for (const ref of timelineHoverEventOverlayRefs) {
-      setTimelineHoverEvent(ref.current, undefined);
-    }
-    timelineHoverOverlayRef.current?.removeAttribute(
-      "data-timeline-hover-target",
-    );
-    appliedTimelineHoverKeyRef.current = undefined;
-  }, []);
-  const applyTimelineHoverTarget = useCallback(
-    (target: TimelineSelectionTarget | undefined) => {
-      const targetKey = target
-        ? target.kind === "event"
-          ? `event:${target.eventId}`
-          : `intent:${target.spanId}\u0000${target.path}`
-        : undefined;
-      if (targetKey === appliedTimelineHoverKeyRef.current) return;
-
-      const trace = selectionResolver.resolveHover(target);
-      const spanId = trace.spanIds.values().next().value;
-      const spanItem = spanId
-        ? renderData.spanRenderById.get(spanId)
-        : undefined;
-      setTimelineHoverPath(
-        timelineHoverSpanOverlayRef.current,
-        spanItem?.linePath,
-        spanItem?.color,
-      );
-      setTimelineHoverOpenEnd(
-        timelineHoverOpenEndOverlayRef.current,
-        spanItem,
-      );
-
-      let connectorIndex = 0;
-      for (const connectorId of trace.connectorIds) {
-        const ref = timelineHoverConnectorOverlayRefs[connectorIndex];
-        if (!ref) break;
-        const item = renderData.connectorRenderById.get(connectorId);
-        setTimelineHoverPath(ref.current, item?.pathData, item?.color);
-        connectorIndex += 1;
-      }
-      for (
-        ;
-        connectorIndex < timelineHoverConnectorOverlayRefs.length;
-        connectorIndex += 1
-      ) {
-        setTimelineHoverPath(
-          timelineHoverConnectorOverlayRefs[connectorIndex].current,
-          undefined,
-          undefined,
-        );
-      }
-
-      let eventIndex = 0;
-      for (const eventId of trace.eventIds) {
-        const ref = timelineHoverEventOverlayRefs[eventIndex];
-        if (!ref) break;
-        setTimelineHoverEvent(
-          ref.current,
-          renderData.eventRenderById.get(eventId),
-        );
-        eventIndex += 1;
-      }
-      for (
-        ;
-        eventIndex < timelineHoverEventOverlayRefs.length;
-        eventIndex += 1
-      ) {
-        setTimelineHoverEvent(
-          timelineHoverEventOverlayRefs[eventIndex].current,
-          undefined,
-        );
-      }
-      if (targetKey) {
-        timelineHoverOverlayRef.current?.setAttribute(
-          "data-timeline-hover-target",
-          targetKey,
-        );
-      } else {
-        timelineHoverOverlayRef.current?.removeAttribute(
-          "data-timeline-hover-target",
-        );
-      }
-      appliedTimelineHoverKeyRef.current = targetKey;
-    },
-    [renderData, selectionResolver],
-  );
-  const handleTimelineTargetHover = useCallback<TimelineTargetInteraction>(
-    (target) => {
-      pendingTimelineHoverTargetRef.current = target;
-      if (timelineHoverFrameRef.current !== undefined) return;
-      timelineHoverFrameRef.current = window.requestAnimationFrame(() => {
-        timelineHoverFrameRef.current = undefined;
-        applyTimelineHoverTarget(pendingTimelineHoverTargetRef.current);
-      });
-    },
-    [applyTimelineHoverTarget],
-  );
-  useEffect(() => {
-    pendingTimelineHoverTargetRef.current = undefined;
-    if (timelineHoverFrameRef.current !== undefined) {
-      window.cancelAnimationFrame(timelineHoverFrameRef.current);
-      timelineHoverFrameRef.current = undefined;
-    }
-    clearTimelineHover();
-    return () => {
-      if (timelineHoverFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(timelineHoverFrameRef.current);
-        timelineHoverFrameRef.current = undefined;
-      }
-      clearTimelineHover();
-    };
-  }, [clearTimelineHover, selectionResolver]);
-  const activateIntent = useCallback<TimelineIntentInteraction>(
-    (span, surface, mode = "same-reader") => {
-      if (foldSelection.active) return;
-      setSelectedCommitHash(undefined);
-      onSelectedFoldRangeChange(undefined);
-      setSelectedTarget({
-        kind: "intent",
-        path: span.path,
-        spanId: span.id,
-      });
-      if (timelineIntentOpensReader(surface, managedPaths.has(span.path))) {
-        onSelect(span.path, mode);
-      }
-    },
-    [
-      foldSelection.active,
-      managedPaths,
-      onSelect,
-      onSelectedFoldRangeChange,
-    ],
-  );
-  const selectEventTarget = useCallback(
-    (target: Extract<TimelineSelectionTarget, { kind: "event" }>) => {
-      const marker = renderData.eventById.get(target.eventId);
-      if (!marker) return;
-      if (foldSelection.active) {
-        onFoldEndpoint({
-          startEventIndex: marker.startEventIndex,
-          endEventIndex: marker.endEventIndex,
-        });
-        return;
-      }
-      setSelectedCommitHash(undefined);
-      setSelectedTarget(target);
-      onSelectedFoldRangeChange(marker.foldRange);
-    },
-    [
-      foldSelection.active,
-      onFoldEndpoint,
-      onSelectedFoldRangeChange,
-      renderData.eventById,
-    ],
-  );
-  const selectAnchor = useCallback(
-    (name: string) => {
-      setSelectedCommitHash(undefined);
-      onSelectedFoldRangeChange(undefined);
-      const targetX = anchorPositions.get(name)?.x;
-      const scrollContainer = timelineCanvasScrollRef.current;
-      if (targetX !== undefined && scrollContainer) {
-        scrollContainer.scrollTo({
-          left: centeredTimelineScrollLeft(
-            targetX + timelineLeadingInset,
-            scrollContainer.clientWidth,
-            scrollContainer.scrollWidth,
-          ),
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
-            .matches
-            ? "auto"
-            : "smooth",
-        });
-      }
-      setSelectedAnchorName((current) =>
-        current === name ? undefined : name,
-      );
-      setSelectedTarget(undefined);
-    },
-    [
-      anchorPositions,
-      timelineLeadingInset,
-      onSelectedFoldRangeChange,
-    ],
-  );
-  const selectCommit = useCallback((commit: string) => {
-    setSelectedCommitHash(commit);
-    setSelectedAnchorName(undefined);
-    setSelectedTarget(undefined);
-    onSelectedFoldRangeChange(undefined);
-  }, [onSelectedFoldRangeChange]);
-  const inspector = foldSelection.active ? null : selectedEvent ? (
-    <TimelineEventInspector
-      marker={selectedEvent}
-      managedPaths={managedPaths}
-      displayPaths={displayPaths}
-      onSelect={onSelect}
-    />
-  ) : selectedIntent ? (
-    <TimelineIntentInspector
-      span={selectedIntent}
-      trace={selectedTrace}
-      managedPaths={managedPaths}
-      displayPaths={displayPaths}
-      onSelect={onSelect}
-    />
-  ) : selectedAnchor && selectedAnchorName ? (
-    <TimelineAnchorInspector
-      name={selectedAnchorName}
-      anchor={selectedAnchor}
-      slice={selectedAnchorSlice}
-      position={selectedAnchorPosition}
-      eventCount={graph.events.length}
-      onSelect={onSelect}
-    />
-  ) : selectedCommit ? (
-    <TimelineCommitInspector commit={selectedCommit.commit} commits={commits} onSelect={selectCommit} />
-  ) : null;
-  const hasInspector = inspector !== null;
-  const panelResizeControl = useMemo<TimelinePanelResizeControlProps>(
-    () => ({
-      onPointerDown: beginPanelResize("timeline-information"),
-      onLostPointerCapture: (
-        event: ReactPointerEvent<HTMLButtonElement>,
-      ) => finishPanelResize(event.pointerId, true),
-      onKeyDown: resizePanelWithKeyboard("timeline-information"),
-      onReset: resetPanelLayout,
-    }),
-    [
-      beginPanelResize,
-      finishPanelResize,
-      resetPanelLayout,
-      resizePanelWithKeyboard,
-    ],
-  );
-  const workspaceStyle = {
-    "--timeline-entry-rail-width": `${entryRailWidth}px`,
-    "--timeline-retirement-fade-duration": `${TIMELINE_RETIREMENT_FADE_DURATION_MS}ms`,
-    ...(panelLayout.inspectorHeight === undefined
-      ? {}
-      : {
-          "--timeline-inspector-panel-height": `${
-            panelLayout.inspectorHeight
-          }px`,
-      }),
-  } as CSSProperties;
-  const entryDockRowCount = anchorEntries.length;
-  const entryDockHeight =
-    entryDockRowCount === 0
-      ? 0
-      : Math.min(140, 8 + entryDockRowCount * 24);
-  const visibleFoldCount = presentationTopology.visibleFoldRanges.length;
-  const nestedFoldCount = foldRanges.length - visibleFoldCount;
-  const foldedEventCount = presentationTopology.visibleFoldRanges.reduce(
-    (count, range) =>
-      count + range.endEventIndex - range.startEventIndex + 1,
-    0,
-  );
-  const timelineResultStyle = {
-    "--timeline-entry-dock-height": `${entryDockHeight}px`,
-  } as CSSProperties;
-
-  return (
-    <section
-      ref={timelineWorkspaceRef}
-      className={`timeline-workspace${hasInspector ? " has-information" : ""}`}
-      aria-label="Registered opening-intent timeline"
-      data-timeline-focus-boundary={visibleFocusedEventBoundary}
-      style={workspaceStyle}
-      onPointerMove={moveEntryRailResize}
-      onPointerUp={finishEntryRailResize}
-      onPointerCancel={finishEntryRailResize}
-      onLostPointerCapture={finishEntryRailResize}
-    >
-      <WorkspaceBanner ariaLabel="Timeline summary" className="timeline-summary" multiline
-        trailing={
-          <button type="button" className="timeline-close" onClick={onClose}
-            aria-label="Close Timeline and return to Structure" title="Return to Structure">
-            <CloseIcon /><span>Structure</span>
-          </button>
-        }>
-        <div className="timeline-summary__content">
-          <div className="timeline-summary__overview">
-            <strong className="timeline-summary__title">Timeline</strong>
-            <div className="timeline-summary__scope">
-              <span><strong>{graph.events.length}</strong> events</span>
-              {historyLoading ? <span role="status">Loading Git history…</span>
-                : historyError ? <span role="alert">Git history unavailable: {historyError} <button type="button" onClick={onRetryHistory}>Retry</button></span>
-                : <span><strong>{commits.length}</strong> {commits.length === 1 ? "commit" : "commits"}
-                  {commits.length > 0 ? <button type="button" onClick={() => selectCommit(selectedCommit?.commit ?? commits[commits.length - 1].commit)}>Browse commits</button> : null}
-                </span>}
-              <span><strong>{anchorEntries.length}</strong> {anchorEntries.length === 1 ? "anchor" : "anchors"}</span>
-              {visibleFoldCount > 0 ? <>
-                <span><strong>{visibleFoldCount}</strong> {visibleFoldCount === 1 ? "fold" : "folds"}</span>
-                {nestedFoldCount > 0 ? <span><strong>{nestedFoldCount}</strong> nested</span> : null}
-                <span><strong>{foldedEventCount}</strong> folded events</span>
-              </> : null}
-            </div>
-          </div>
-          <HelpOnly><p className="timeline-summary__help">
-            Events follow authored order across {presentation.events.length} visible nodes.
-            Select an event or lifeline to inspect it, or an Anchor to pin its position.
-          </p></HelpOnly>
-          {foldNotice ? (
-            <span className="timeline-summary__fold-state is-warning" role="status">
-              {foldNotice}
-            </span>
-          ) : foldSelection.active ? (
-            <span className="timeline-summary__fold-state" role="status">
-              <HelpOnly fallback={foldSelection.firstEndpoint ? `Start: ${timelineEventMarkerLabel(foldSelection.firstEndpoint)} · Select end` : "Select start"}>
-                {foldSelection.firstEndpoint
-                ? `Select a second event or folded region; the first endpoint is ${timelineEventMarkerLabel(
-                    foldSelection.firstEndpoint,
-                  )}.`
-                : "Select the first event or folded region."}
-              </HelpOnly>
-            </span>
-          ) : null}
-        </div>
-      </WorkspaceBanner>
-
-      {inspector}
-
-      <TimelineReorderStartedAtContext.Provider
-        value={timelineReorderStartedAt}
-      >
-        <div
-          className={`timeline-result${
-            entryDockRowCount > 0 ? " has-entry-dock" : ""
-          }`}
-          style={timelineResultStyle}
-        >
-          <div className="timeline-result__scroll">
-          <div className="timeline-result__content">
-            <div
-              ref={timelineCanvasScrollRef}
-              className="timeline-canvas-scroll"
-              data-timeline-scroll="ordinary"
-              style={{ height: dimensions.height }}
-            >
-              <div className="timeline-canvas-scroll__content">
-                <div
-                  className="timeline-canvas-scroll__leading-space"
-                  style={{ width: timelineLeadingInset }}
-                  aria-hidden="true"
-                />
-                <svg
-                  className="timeline-canvas"
-                  viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
-                  width={timelineCanvasRenderedWidth}
-                  height={dimensions.height}
-                  preserveAspectRatio="xMinYMin meet"
-                  role="group"
-                  aria-label={`${graph.events.length} registered opening-intent events in ${
-                    presentation.events.length
-                  } timeline nodes`}
-                >
-            {selectedAnchorX !== undefined && selectedAnchorName ? (
-              <g
-                className="timeline-anchor-slice"
-                data-position-kind={selectedAnchorPosition?.kind}
-                aria-hidden="true"
-              >
-                <rect
-                  x={selectedAnchorX - 10}
-                  y={18}
-                  width={20}
-                  height={dimensions.height - 40}
-                  rx={7}
-                />
-                <line
-                  x1={selectedAnchorX}
-                  x2={selectedAnchorX}
-                  y1={19}
-                  y2={dimensions.height - 22}
-                />
-                <text x={selectedAnchorX + 6} y={26}>
-                  {selectedAnchorName}
-                </text>
-              </g>
-            ) : null}
-            <TimelineGuides
-              events={presentation.events}
-              height={dimensions.height}
-              presentX={presentX}
-            />
-            <TimelineCommitStrip
-              commits={commits}
-              positions={commitTickPositions}
-              selectedHash={selectedCommit?.commit}
-              onSelect={selectCommit}
-            />
-
-            <g
-              className={`timeline-lifeline-layer${
-                stableSelectedTargetKey ? " has-selection" : ""
-              }`}
-            >
-              <TimelineBaseLifelines
-                renderData={renderData}
-                anchoredPaths={anchoredTimelinePathSet}
-                onElement={registerTimelineSelectableElement}
-                onActivate={activateIntent}
-                onHover={handleTimelineTargetHover}
-              />
-            </g>
-
-            <g
-              className={`timeline-event-layer${
-                stableSelectedTargetKey ? " has-selection" : ""
-              }`}
-            >
-              <TimelineBaseEvents
-                renderData={renderData}
-                foldBoundaryKey={
-                  foldSelection.firstEndpoint
-                    ? timelineFoldRangeKey(foldSelection.firstEndpoint)
-                    : undefined
-                }
-                foldSelecting={foldSelection.active}
-                onElement={registerTimelineSelectableElement}
-                onSelect={selectEventTarget}
-                onHover={handleTimelineTargetHover}
-              />
-            </g>
-
-            <TimelineSelectionOverlayGlyph
-              renderData={renderData}
-              trace={selectedTrace}
-              target={stableSelectedTarget}
-            />
-
-            {selectedAnchorX !== undefined && anchorTiePoints.length > 0 ? (
-              <TimelineAnchorTieGlyph
-                x={selectedAnchorX}
-                points={anchorTiePoints}
-              />
-            ) : null}
-            <g
-              ref={timelineHoverOverlayRef}
-              className="timeline-hover-overlay"
-              aria-hidden="true"
-            >
-              <path
-                ref={timelineHoverSpanOverlayRef}
-                className="timeline-hover-overlay__span"
-              />
-              <circle
-                ref={timelineHoverOpenEndOverlayRef}
-                className="timeline-hover-overlay__open-end"
-                r="4"
-              />
-              {timelineHoverConnectorOverlayRefs.map((ref, index) => (
-                <path
-                  key={`timeline-hover-connector:${index}`}
-                  ref={ref}
-                  className="timeline-hover-overlay__connector"
-                />
-              ))}
-              {timelineHoverEventOverlayRefs.map((ref, index) => (
-                <g
-                  key={`timeline-hover-event:${index}`}
-                  ref={ref}
-                  className="timeline-hover-overlay__event"
-                >
-                  <circle
-                    className="timeline-hover-overlay__event-ring"
-                    r="5.5"
-                  />
-                  <circle
-                    className="timeline-hover-overlay__event-dot"
-                    r="2.75"
-                  />
-                  <text
-                    className="timeline-hover-overlay__event-count"
-                    y="2.1"
-                    textAnchor="middle"
-                  />
-                  <text y="-10" textAnchor="middle" />
-                </g>
-              ))}
-            </g>
-                </svg>
-              </div>
-            </div>
-
-            <aside
-              className="timeline-entry-rail"
-              aria-label={`Intent entries open after ${
-                visibleFocusedEventBoundary === 0
-                  ? "the start of the registered flow"
-                  : `E${visibleFocusedEventBoundary}`
-              }`}
-            >
-              <div
-                className="timeline-entry-rail__rows"
-                style={{ height: dimensions.height }}
-              >
-                {timelineRailEntries.map((entry) => {
-                  const { span } = entry;
-                  const path = span.path;
-                  const target = renderData.targetBySpanId.get(span.id);
-                  if (!target) return null;
-                  const active = selectedTrace.paths.has(path);
-                  const primary =
-                    stableSelectedTarget?.kind === "intent" &&
-                    stableSelectedTarget.path === path;
-                  return (
-                    <TimelineFileEntry
-                      key={path}
-                      span={span}
-                      label={displayPaths.get(span.path) ?? span.path}
-                      target={target}
-                      y={yForLane(span.lane)}
-                      initialY={
-                        entry.initialY ?? initialEntryYByPath.get(path)
-                      }
-                      retirementPhase={entry.retirementPhase}
-                      active={active}
-                      primary={primary}
-                      anchored={anchoredTimelinePathSet.has(path)}
-                      pressed={
-                        stableSelectedTarget?.kind === "intent" &&
-                        stableSelectedTarget.spanId === span.id
-                      }
-                      managed={entry.managed}
-                      color={entry.color}
-                      onHover={handleTimelineTargetHover}
-                      onActivate={activateIntent}
-                    />
-                  );
-                })}
-              </div>
-            </aside>
-          </div>
-        </div>
-
-        <TimelineRailResizeHandle {...railResizeControl} />
-
-        {entryDockRowCount > 0 ? (
-          <TimelineAnchorEntryDock
-            anchorEntries={anchorEntries}
-            positions={anchorPositions}
-            eventCount={graph.events.length}
-            selectedName={selectedAnchorName}
-            onSelect={selectAnchor}
-            onOpen={onSelect}
-          />
-        ) : null}
-
-        {hasInspector ? (
-          <TimelinePanelResizeHandle
-            boundary="timeline-information"
-            {...panelResizeControl}
-          />
-        ) : null}
-
-        {presentation.events.length === 0 ? (
-          <div className="timeline-unchanged">
-            No opening-intent event is registered.
-          </div>
-        ) : null}
-        </div>
-      </TimelineReorderStartedAtContext.Provider>
-    </section>
-  );
-}
-
-const TimelineAnchorEntryDock = memo(function TimelineAnchorEntryDock({
-  anchorEntries,
-  positions,
-  eventCount,
-  selectedName,
-  onSelect,
-  onOpen,
-}: {
-  anchorEntries: TimelineAnchorEntry[];
-  positions: ReadonlyMap<string, TimelineAnchorPosition | undefined>;
-  eventCount: number;
-  selectedName?: string;
-  onSelect: (name: string) => void;
-  onOpen: ReaderDocumentActivation;
-}) {
-  return (
-    <aside
-      className="timeline-special-entry-dock"
-      aria-label="Current stable anchors"
-    >
-      {anchorEntries.length > 0 ? (
-        <div
-          className="timeline-special-entry-dock__section timeline-anchor-dock__rows"
-          role="group"
-          aria-label="Current stable anchors"
-        >
-          {anchorEntries.map((entry) => {
-            const position = positions.get(entry.name);
-            const boundary = anchorBoundaryLabel(
-              entry.slice?.event_boundary,
-              eventCount,
-              position,
-            );
-            return (
-              <TimelineAnchorDockRow
-                key={timelineAnchorEntryKey(entry.name)}
-                entry={entry}
-                boundary={boundary}
-                selected={selectedName === entry.name}
-                mapped={position !== undefined}
-                onSelect={() => onSelect(entry.name)}
-                onActivate={(mode) => onOpen(entry.definition.file, mode)}
-              />
-            );
-          })}
-        </div>
-      ) : null}
-    </aside>
-  );
-});
-
-function TimelineEventInspector({
-  marker,
-  managedPaths,
-  displayPaths,
-  onSelect,
-}: {
-  marker: TimelineEventMarker;
-  managedPaths: Set<string>;
-  displayPaths: ReadonlyMap<string, string>;
-  onSelect: ReaderDocumentActivation;
-}) {
-  const folded = Boolean(marker.foldRange);
-  const grouped = !folded && marker.events.length > 1;
-  const markerLabel = timelineEventMarkerLabel(marker);
-  const eventLog = timelineEventLogEntries(marker);
-  return (
-    <div
-      className={`timeline-inspector timeline-event-inspector${
-        folded ? " is-folded" : ""
-      }`}
-      aria-live="polite"
-    >
-      <header className="timeline-inspector__event">
-        <div>
-          <span>
-            {folded
-              ? "Fold"
-              : grouped
-                ? "Events"
-                : "Event"}
-          </span>
-          <strong>{markerLabel}</strong>
-          {folded || grouped ? <small>
-            {marker.events.length} events
-            <HelpOnly> · {folded ? "exact collection" : "shared file collection"}</HelpOnly>
-          </small> : null}
-        </div>
-      </header>
-      <div
-        className="timeline-inspector__event-details"
-        aria-label={`${eventLog.length} event log ${
-          eventLog.length === 1 ? "entry" : "entries"
-        }`}
-      >
-        {eventLog.map(({ event, eventNumber }) => (
-          <article key={`${eventNumber}:${event.name}`}>
-            <header>
-              <span>E{eventNumber}</span>
-              <strong>{event.name}</strong>
-            </header>
-            {event.description ? <p>{event.description}</p> : (
-              <HelpOnly><p className="is-empty">No event description.</p></HelpOnly>
-            )}
-          </article>
-        ))}
-      </div>
-      {folded ? null : (
-        <div className="timeline-inspector__changes">
-          <IntentList
-            label={grouped ? "Shared predecessors" : "Predecessors"}
-            paths={marker.event.predecessors}
-            managedPaths={managedPaths}
-            displayPaths={displayPaths}
-            onSelect={onSelect}
-          />
-          <IntentList
-            label={grouped ? "Shared successors" : "Successors"}
-            paths={marker.event.successors}
-            managedPaths={managedPaths}
-            displayPaths={displayPaths}
-            onSelect={onSelect}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TimelineIntentInspector({
-  span,
-  trace,
-  managedPaths,
-  displayPaths,
-  onSelect,
-}: {
-  span: TimelineIntentSpan;
-  trace: TimelineSelectionTrace;
-  managedPaths: Set<string>;
-  displayPaths: ReadonlyMap<string, string>;
-  onSelect: ReaderDocumentActivation;
-}) {
-  return (
-    <div className="timeline-inspector" aria-live="polite">
-      <header className="timeline-inspector__event">
-        <div>
-          <span>Intent lifeline</span>
-          <strong title={span.path}>{displayPaths.get(span.path) ?? span.path}</strong>
-        </div>
-        {managedPaths.has(span.path) ? (
-          <button
-            className="timeline-inspector__open"
-            type="button"
-            onClick={(event) =>
-              onSelect(span.path, readerNavigationMode(event))
-            }
-          >
-            Open file
-          </button>
-        ) : null}
-      </header>
-      <div className="timeline-inspector__changes">
-        <IntentList
-          label="Past sources"
-          paths={trace.pastPaths}
-          managedPaths={managedPaths}
-          displayPaths={displayPaths}
-          onSelect={onSelect}
-        />
-        <IntentList
-          label="Future branches"
-          paths={trace.futurePaths}
-          managedPaths={managedPaths}
-          displayPaths={displayPaths}
-          onSelect={onSelect}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TimelineAnchorInspector({
-  name,
-  anchor,
-  slice,
-  position,
-  eventCount,
-  onSelect,
-}: {
-  name: string;
-  anchor: AnchorDefinition;
-  slice?: AnchorTimelineSlice;
-  position?: TimelineAnchorPosition;
-  eventCount: number;
-  onSelect: ReaderDocumentActivation;
-}) {
-  const boundary = anchorBoundaryLabel(
-    slice?.event_boundary,
-    eventCount,
-    position,
-  );
-  return (
-    <div className="timeline-inspector timeline-anchor-inspector" aria-live="polite">
-      <header className="timeline-inspector__event">
-        <div>
-          <span>Anchor</span>
-          <strong>{name}</strong>
-          <code title={anchor.commit}>{anchor.commit}</code>
-        </div>
-      </header>
-      <p className="timeline-inspector__description">
-        <strong>{boundary}</strong>
-        {anchor.description ? <span>{anchor.description}</span> : null}
-      </p>
-      <div className="timeline-inspector__changes">
-        <section>
-          <h2>Document</h2>
-          <button
-            className="timeline-intent-row"
-            type="button"
-            onClick={(event) =>
-              onSelect(anchor.file, readerNavigationMode(event))
-            }
-          >
-            {anchor.file}
-          </button>
-          <h2>
-            Historical connections <span>{anchor.connections.length}</span>
-          </h2>
-          {anchor.connections.length === 0 ? (
-            <p className="timeline-intent-empty">None</p>
-          ) : null}
-          {anchor.connections.map((connection) => (
-            <div
-              className="timeline-intent-row timeline-anchor-connection"
-              key={`${connection.type}\u0000${connection.target}`}
-            >
-              <strong>{connection.type}</strong>
-              <code>{connection.target}</code>
-            </div>
-          ))}
-        </section>
-        <HelpOnly><section className="timeline-anchor-inspector__meaning">
-          <h2>Timeline cue</h2>
-          <p>
-            {position?.kind === "event-boundary"
-              ? "Pinned at the Event boundary; matching lifelines are linked."
-              : position?.kind === "commit"
-                ? "Pinned to its Git commit; Event position is unknown."
-                : "No matching Event boundary or commit in this view."}
-          </p>
-        </section></HelpOnly>
-      </div>
-    </div>
-  );
-}
-
-function TimelineCommitInspector({ commit, commits, onSelect }: {
-  commit: string; commits: TimelineCommit[]; onSelect: (commit: string) => void;
-}) {
-  const selectedIndex = commits.findIndex((entry) => entry.commit === commit);
-  const page = timelineCommitPage(commits.length, selectedIndex);
-  const [copyStatus, setCopyStatus] = useState<
-    "idle" | "copied" | "failed"
-  >("idle");
-  const shortCommit = commit.slice(0, 8);
-  useEffect(() => setCopyStatus("idle"), [commit]);
-  const copyCommit = useCallback(async () => {
-    try {
-      await copyTimelineText(commit);
-      setCopyStatus("copied");
-    } catch {
-      setCopyStatus("failed");
-    }
-  }, [commit]);
-
-  return (
-    <div
-      className="timeline-inspector timeline-commit-inspector"
-      aria-live="polite"
-    >
-      <header className="timeline-inspector__event">
-        <div>
-          <span>Git commit</span>
-          <strong>{shortCommit}</strong>
-        </div>
-      </header>
-      <nav aria-label="Browse exact Git commits" className="timeline-commit-browser">
-        <div className="timeline-commit-browser__controls">
-          <button type="button" disabled={page.start === 0} onClick={() => onSelect(commits[Math.max(0, page.start - 32)].commit)}>Earlier commits</button>
-          <span>Commits {page.start + 1}–{page.end} of {commits.length}</span>
-          <button type="button" disabled={page.end === commits.length} onClick={() => onSelect(commits[page.end].commit)}>Later commits</button>
-        </div>
-        <label>Commit number <input type="number" min={1} max={commits.length} value={selectedIndex + 1}
-          onChange={(event) => {
-            const index = Number(event.target.value) - 1;
-            if (Number.isInteger(index) && index >= 0 && index < commits.length) onSelect(commits[index].commit);
-          }} /></label>
-        <div className="timeline-commit-browser__entries">
-          {commits.slice(page.start, page.end).map((entry, index) => <button type="button" key={entry.commit}
-            aria-pressed={entry.commit === commit} title={entry.commit}
-            onClick={() => onSelect(entry.commit)}>{page.start + index + 1}: {entry.commit.slice(0, 8)}</button>)}
-        </div>
-      </nav>
-      <div className="timeline-commit-inspector__identity">
-        <div>
-          <span>Full commit ID</span>
-          <code title={commit}>{commit}</code>
-        </div>
-        <button type="button" onClick={copyCommit}>
-          {copyStatus === "copied"
-            ? "Copied"
-            : copyStatus === "failed"
-              ? "Copy failed"
-              : "Copy full ID"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function IntentList({
-  label,
-  paths,
-  managedPaths,
-  displayPaths,
-  onSelect,
-}: {
-  label: string;
-  paths: string[];
-  managedPaths: Set<string>;
-  displayPaths: ReadonlyMap<string, string>;
-  onSelect: ReaderDocumentActivation;
-}) {
-  return (
-    <section>
-      <h2>{label} <span>{paths.length}</span></h2>
-      {paths.length === 0 ? <p className="timeline-intent-empty">None</p> : null}
-      {paths.map((path) =>
-        managedPaths.has(path) ? (
-          <button
-            className="timeline-intent-row"
-            type="button"
-            key={path}
-            title={path}
-            onClick={(event) => onSelect(path, readerNavigationMode(event))}
-          >
-            {displayPaths.get(path) ?? path}
-          </button>
-        ) : (
-          <strong className="timeline-intent-row" key={path} title={path}>{displayPaths.get(path) ?? path}</strong>
-        ),
-      )}
-    </section>
-  );
+    const element = ref.current;
+    if (!element) return;
+    const elapsed = Math.max(0, performance.now() - file.startedAt);
+    const movement = element.animate([
+      {transform: `translateY(${file.initialY - FILE_LANE_HEIGHT / 2}px)`},
+      {transform: `translateY(${file.y - FILE_LANE_HEIGHT / 2}px)`},
+    ], {duration: Math.max(0, 280 - elapsed), easing: "ease-out"});
+    const fade = element.animate([{opacity: 0.7}, {opacity: 0}], {delay: Math.max(0, 460 - elapsed), duration: Math.max(0, 420 - Math.max(0, elapsed - 460)), fill: "forwards"});
+    return () => {movement.cancel();fade.cancel();};
+  }, [file.startedAt]);
+  return <button type="button" ref={ref} className="timeline-file-entry is-retiring" data-retiring="true"
+    style={{transform: `translateY(${file.y - FILE_LANE_HEIGHT / 2}px)`, "--timeline-entry-color": file.color} as CSSProperties}
+    tabIndex={-1} aria-label={`${file.path}, leaving this historical view`} title={file.path} onClick={event => onSelect(readerNavigationMode(event))}>
+    <span className="timeline-entry-box"><span className="timeline-entry-name">{file.name}</span><span className="timeline-entry-id">leaving</span></span>
+  </button>;
 }

@@ -28,15 +28,17 @@ use crate::soe::{
 };
 use crate::yaml::{insert_root_mapping_entry, remove_root_mapping_entry, validate_restricted_yaml};
 pub const MANIFEST_FILENAME: &str = "MINDFLOW.yaml";
-pub const CURRENT_FORMAT: &str = "2026-10-20";
+pub const CURRENT_FORMAT: &str = "2026-10-27";
 pub const SNAPSHOT_ID_VERSION: u32 = 2;
-pub const REGION_INDEX_SCHEMA: &str = "mindflow-region-index/v5";
-pub const EVENT_PAGE_SCHEMA: &str = "mindflow-evolve-event-page/v1";
+pub const REGION_INDEX_SCHEMA: &str = "mindflow-region-index/v7";
+pub const EVENT_PAGE_SCHEMA: &str = "mindflow-evolve-event-page/v3";
 pub const DEFAULT_EVENT_PAGE_SIZE: usize = 64;
 pub const MAX_EVENT_PAGE_SIZE: usize = 512;
-pub const CHANGE_PROPOSAL_SCHEMA: &str = "mindflow-change-proposal/v3";
-pub const CHANGE_APPLIED_SCHEMA: &str = "mindflow-change-applied/v3";
-pub const EMPTY_MANIFEST_SOURCE: &str = concat!("format: \"2026-10-20\"\nadopted-release: \"", env!("CARGO_PKG_VERSION"), "\"\ncomponents: {}\nrelationship-types: {}\nrelationships: []\nanchor-connection-types: {}\nopening:\n  files: []\nevolve:\n  events: []\nhistorical-components: {}\nanchors: {}\n");
+pub const MAX_EVENTS: usize = 4096;
+pub const MAX_EVENT_DEPTH: usize = 32;
+pub const CHANGE_PROPOSAL_SCHEMA: &str = "mindflow-change-proposal/v4";
+pub const CHANGE_APPLIED_SCHEMA: &str = "mindflow-change-applied/v4";
+pub const EMPTY_MANIFEST_SOURCE: &str = concat!("format: \"2026-10-27\"\nadopted-release: \"", env!("CARGO_PKG_VERSION"), "\"\ncomponents: {}\nrelationship-types: {}\nrelationships: []\nanchor-connection-types: {}\nopening:\n  files: []\nevolve:\n  events: []\nanchors: {}\n");
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
@@ -137,7 +139,7 @@ pub struct EventPage {
     pub offset: usize,
     pub limit: usize,
     pub total: usize,
-    pub events: Vec<crate::model::EvolveEvent>,
+    pub events: Vec<crate::model::EventView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<usize>,
 }
@@ -152,8 +154,6 @@ pub enum ChangeOperation {
         description: Option<String>,
         relationship_parent: String,
         relationship_type: String,
-        event: String,
-        event_description: String,
     },
 }
 
@@ -293,9 +293,21 @@ pub struct AnchorTimelineSlice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitIdentity {
+    pub name: String,
+    pub email: String,
+    pub date: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimelineCommit {
     pub commit: String,
     pub event_boundary: Option<usize>,
+    pub subject: String,
+    pub message: String,
+    pub author: GitIdentity,
+    pub committer: GitIdentity,
+    pub parents: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -486,14 +498,6 @@ impl Project {
             })
             .map(|c| c.path.as_str())
     }
-    fn document_path_for_reference(&self, id: &str) -> Option<&str> {
-        self.document_path(id).or_else(|| {
-            self.manifest
-                .historical_components
-                .get(id)
-                .map(|c| c.path.as_str())
-        })
-    }
     fn compute_document_handles(&self) -> Vec<DocumentHandle> {
         self.registrations()
             .into_iter()
@@ -595,10 +599,10 @@ impl Project {
             format: CURRENT_FORMAT.into(),
             structure: self.structure()?,
             documents: self.document_handles()?,
+            historical_components: self.manifest.historical_components.clone(),
             relationship_types: self.manifest.relationship_types.clone(),
             anchor_connection_types: self.manifest.anchor_connection_types.clone(),
-            historical_components: self.manifest.historical_components.clone(),
-            events: self.manifest.evolve.events.clone(),
+            events: self.event_views(),
             anchors: self.anchor_views(),
         })
     }
@@ -617,7 +621,7 @@ impl Project {
             opening: self.opening(),
             events: PlaneDescriptor {
                 count: self.manifest.evolve.events.len(),
-                sha256: sha256_bytes(&serde_json::to_vec(&self.manifest.evolve.events).unwrap()),
+                sha256: sha256_bytes(&serde_json::to_vec(&self.event_views()).unwrap()),
                 page_size: DEFAULT_EVENT_PAGE_SIZE,
                 command: vec!["evolve".into(), "events".into(), "--json".into()],
             },
@@ -640,11 +644,35 @@ impl Project {
                 .collect(),
         }
     }
+    fn event_view(&self, event: &EvolveEvent) -> EventView {
+        let file = self
+            .document_path(&event.component)
+            .expect("validated Event document");
+        EventView {
+            component: event.component.clone(),
+            name: file.rsplit('/').next().unwrap_or(file).to_owned(),
+            file: file.to_owned(),
+            content: match &self.document_sources[file] {
+                CapturedDocument::Text(prose) => content_handle(prose),
+                _ => unreachable!("validated Event prose"),
+            },
+            children: event.children.clone(),
+            opening: event.opening.clone(),
+        }
+    }
+    fn event_views(&self) -> Vec<EventView> {
+        self.manifest
+            .evolve
+            .events
+            .iter()
+            .map(|event| self.event_view(event))
+            .collect()
+    }
     pub fn evolve_flow(&self) -> EvolveFlow {
         self.require_valid()
             .expect("Events require a valid project");
         EvolveFlow {
-            events: self.manifest.evolve.events.clone(),
+            events: self.event_views(),
         }
     }
     pub fn event_page(&self, offset: usize, limit: usize) -> Result<EventPage> {
@@ -664,7 +692,10 @@ impl Project {
             offset,
             limit,
             total,
-            events: self.manifest.evolve.events[offset..end].to_vec(),
+            events: self.manifest.evolve.events[offset..end]
+                .iter()
+                .map(|event| self.event_view(event))
+                .collect(),
             next_offset: (end < total).then_some(end),
         })
     }
@@ -735,19 +766,8 @@ impl Project {
         let Some(head) = self.snapshot.head.as_deref() else {
             return Ok(Vec::new());
         };
-        let commits: Vec<String> = git_output(
-            &self.root,
-            &["rev-list", "--first-parent", "--reverse", head],
-        )
-        .map(|output| {
-            output
-                .lines()
-                .filter(|commit| {
-                    commit.len() == 40 && commit.bytes().all(|byte| byte.is_ascii_hexdigit())
-                })
-                .map(str::to_owned)
-                .collect()
-        })?;
+        let mut records = git_timeline_records(&self.root, head)?;
+        let commits: Vec<String> = records.iter().map(|entry| entry.commit.clone()).collect();
         if commits.is_empty() {
             return Ok(Vec::new());
         }
@@ -789,7 +809,7 @@ impl Project {
                             Some(content) => decode_historical_events(&content, &commit)
                                 .ok()
                                 .and_then(|events| {
-                                    exact_event_name_prefix_boundary(
+                                    exact_event_prefix_boundary(
                                         &self.manifest.evolve.events,
                                         &events,
                                     )
@@ -802,21 +822,16 @@ impl Project {
         .ok();
 
         let mut event_boundary = boundary_updates.as_ref().map(|_| Some(0)).unwrap_or(None);
-        Ok(commits
-            .into_iter()
-            .map(|commit| {
-                if let Some(boundary) = boundary_updates
-                    .as_ref()
-                    .and_then(|updates| updates.get(&commit))
-                {
-                    event_boundary = *boundary;
-                }
-                TimelineCommit {
-                    commit,
-                    event_boundary,
-                }
-            })
-            .collect())
+        for entry in &mut records {
+            if let Some(boundary) = boundary_updates
+                .as_ref()
+                .and_then(|updates| updates.get(&entry.commit))
+            {
+                event_boundary = *boundary;
+            }
+            entry.event_boundary = event_boundary;
+        }
+        Ok(records)
     }
 
     pub fn form_historical_selection(
@@ -1159,40 +1174,6 @@ impl Project {
                 }
             }
         }
-        for (id, history) in &self.manifest.historical_components {
-            let mut error = |code: &str, message: String| {
-                diagnostics.push(Diagnostic::error(
-                    code,
-                    Some(MANIFEST_FILENAME.into()),
-                    message,
-                ))
-            };
-            if !valid_component_id(id) {
-                error(
-                    "historical-component-id",
-                    format!("invalid historical identity `{id}`"),
-                );
-            }
-            if self.manifest.components.contains_key(id) {
-                error(
-                    "historical-component-current",
-                    format!("`{id}` is also current"),
-                );
-            }
-            if let Err(message) = validate_managed_file_path(&history.path) {
-                error("historical-component-path", format!("`{id}`: {message}"));
-            }
-            if history
-                .description
-                .as_deref()
-                .is_some_and(|s| s.trim().is_empty())
-            {
-                error(
-                    "historical-component-description",
-                    format!("`{id}` has an empty description"),
-                );
-            }
-        }
         let mut seen = BTreeSet::new();
         for relation in &self.manifest.relationships {
             let mut error = |code: &str, message: String| {
@@ -1287,90 +1268,235 @@ impl Project {
                 ));
             }
         }
+        let before_events = diagnostics.len();
         self.validate_events(&mut diagnostics);
+        let valid_event_forest = diagnostics.len() == before_events;
+        self.validate_event_opening(&mut diagnostics, valid_event_forest);
         self.validate_anchors(&mut diagnostics);
         diagnostics
     }
     fn validate_events(&self, diagnostics: &mut Vec<Diagnostic>) {
-        let mut names = BTreeSet::new();
-        let mut open = Vec::<String>::new();
-        for event in &self.manifest.evolve.events {
-            let mut error = |code: &str, message: String| {
-                diagnostics.push(Diagnostic::error(
-                    code,
-                    Some(MANIFEST_FILENAME.into()),
-                    format!("Event `{}`: {message}", event.name),
-                ))
-            };
-            if event.name.trim().is_empty() {
-                error("event-name", "empty name".into());
-            } else if !names.insert(&event.name) {
-                error("duplicate-event", "name is repeated".into());
+        let mut error = |code: &str, message: String| {
+            diagnostics.push(Diagnostic::error(
+                code,
+                Some(MANIFEST_FILENAME.into()),
+                message,
+            ));
+        };
+        let events = &self.manifest.evolve.events;
+        if events.len() > MAX_EVENTS {
+            error(
+                "event-limit",
+                format!("Evolve admits at most {MAX_EVENTS} Events"),
+            );
+            return;
+        }
+        let mut ids = BTreeSet::new();
+        for event in events {
+            if !ids.insert(event.component.as_str()) {
+                error(
+                    "duplicate-event",
+                    format!("Event `{}` is repeated", event.component),
+                );
             }
-            if event
+            if self.document_path(&event.component).is_none() {
+                error(
+                    "event-component",
+                    format!(
+                        "Event `{}` must be a current Markdown document",
+                        event.component
+                    ),
+                );
+            }
+            if self
+                .manifest
+                .components
+                .get(&event.component)
+                .is_some_and(|c| c.index)
+            {
+                error(
+                    "event-index-path",
+                    format!("Event `{}` cannot be an index", event.component),
+                );
+            }
+        }
+        let mut parents = BTreeMap::new();
+        for event in events {
+            let mut children = BTreeSet::new();
+            for child in &event.children {
+                if !ids.contains(child.as_str()) {
+                    error(
+                        "event-child",
+                        format!(
+                            "Event `{}` references unknown child `{child}`",
+                            event.component
+                        ),
+                    );
+                }
+                if !children.insert(child) {
+                    error(
+                        "duplicate-event-child",
+                        format!("Event `{}` repeats child `{child}`", event.component),
+                    );
+                }
+                if parents
+                    .insert(child.as_str(), event.component.as_str())
+                    .is_some()
+                {
+                    error(
+                        "event-parent",
+                        format!("Event `{child}` must occur under at most one summary"),
+                    );
+                }
+            }
+        }
+        // Bound every ancestry walk, including rootless cycles. No recursive
+        // parser or renderer traversal is required for the authored forest.
+        for id in ids {
+            let mut seen = BTreeSet::new();
+            let mut cursor = id;
+            loop {
+                if !seen.insert(cursor) {
+                    error(
+                        "event-cycle",
+                        format!("Event `{id}` belongs to a cyclic summary group"),
+                    );
+                    break;
+                }
+                if seen.len() > MAX_EVENT_DEPTH {
+                    error(
+                        "event-depth",
+                        format!("Event `{id}` exceeds {MAX_EVENT_DEPTH} levels of summary nesting"),
+                    );
+                    break;
+                }
+                match parents.get(cursor) {
+                    Some(parent) => cursor = parent,
+                    None => break,
+                }
+            }
+        }
+    }
+
+    fn validate_event_opening(&self, diagnostics: &mut Vec<Diagnostic>, valid_forest: bool) {
+        let before = diagnostics.len();
+        let mut error = |code: &str, message: String| {
+            diagnostics.push(Diagnostic::error(
+                code,
+                Some(MANIFEST_FILENAME.into()),
+                message,
+            ))
+        };
+        for (id, historical) in &self.manifest.historical_components {
+            if !valid_component_id(id) || self.manifest.components.contains_key(id) {
+                error("historical-component-id", format!("historical identity `{id}` must be valid and distinct from current components"));
+            }
+            if validate_managed_file_path(&historical.path).is_err() {
+                error(
+                    "historical-component-path",
+                    format!("historical identity `{id}` needs a normalized Markdown path"),
+                );
+            }
+            if historical
                 .description
                 .as_deref()
-                .is_some_and(|s| s.trim().is_empty())
+                .is_some_and(|value| value.trim().is_empty())
             {
-                error("event-description", "empty description".into());
+                error(
+                    "historical-component-description",
+                    format!("historical identity `{id}` has an empty description"),
+                );
             }
-            if event.predecessors.is_empty() && event.successors.is_empty() {
-                error("event-empty", "at least one side must be nonempty".into());
+        }
+        for event in &self.manifest.evolve.events {
+            let Some(transition) = &event.opening else {
+                continue;
+            };
+            if transition.predecessors.is_empty() && transition.successors.is_empty() {
+                error("empty-event-opening", format!("Event `{}` has no Opening participants; omit opening for a discussion-only Event", event.component));
             }
             for (side, participants) in [
-                ("predecessor", &event.predecessors),
-                ("successor", &event.successors),
+                ("predecessors", &transition.predecessors),
+                ("successors", &transition.successors),
             ] {
                 let mut seen = BTreeSet::new();
                 for id in participants {
                     if !seen.insert(id) {
                         error(
-                            &format!("duplicate-event-{side}"),
-                            format!("repeated {side} `{id}`"),
+                            "duplicate-event-participant",
+                            format!("Event `{}` repeats `{id}` in {side}", event.component),
                         );
                     }
-                    if self.document_path_for_reference(id).is_none() {
-                        error(
-                            "event-component",
-                            format!("`{id}` is not a current or historical document"),
-                        );
+                    if self.manifest.historical_components.contains_key(id) {
+                        continue;
                     }
-                    if self.manifest.components.get(id).is_some_and(|c| c.index) {
-                        error("event-index-path", format!("`{id}` is an index"));
-                    }
-                    if side == "predecessor" && !open.contains(id) {
-                        error("event-predecessor-not-open", format!("`{id}` is not open"));
-                    }
-                    if side == "successor" && open.contains(id) && !event.predecessors.contains(id)
+                    if self.document_path(id).is_none()
+                        || self
+                            .manifest
+                            .components
+                            .get(id)
+                            .is_some_and(|entry| entry.index)
                     {
-                        error(
-                            "event-successor-already-open",
-                            format!("`{id}` is already open without being carried through"),
-                        );
+                        error("event-opening-participant", format!("Event `{}` {side} participant `{id}` is not a current non-index document or historical identity", event.component));
                     }
-                }
-            }
-            open.retain(|id| !event.predecessors.contains(id));
-            for id in &event.successors {
-                if !open.contains(id) {
-                    open.push(id.clone());
                 }
             }
         }
-        if open != self.manifest.opening.files {
-            diagnostics.push(Diagnostic::error(
-                "event-opening-mismatch",
-                Some(MANIFEST_FILENAME.into()),
-                format!(
-                    "ordered Event replay {open:?} does not equal opening.files {:?}",
-                    self.manifest.opening.files
-                ),
-            ));
+        if !valid_forest || diagnostics.len() != before {
+            return;
+        }
+
+        // The first occurrence may carry a file in from before the selected
+        // record. Subsequent transitions must form one coherent authored flow.
+        // The current Opening is independent; unrecorded later edits are not
+        // invented as Events or used to rewrite this flow.
+        let events = &self.manifest.evolve.events;
+        let by_id: BTreeMap<_, _> = events
+            .iter()
+            .map(|event| (event.component.as_str(), event))
+            .collect();
+        let children: BTreeSet<_> = events
+            .iter()
+            .flat_map(|event| event.children.iter().map(String::as_str))
+            .collect();
+        let mut stack: Vec<_> = events
+            .iter()
+            .filter(|event| !children.contains(event.component.as_str()))
+            .rev()
+            .collect();
+        let mut open = BTreeMap::<&str, bool>::new();
+        while let Some(event) = stack.pop() {
+            if let Some(transition) = &event.opening {
+                for id in &transition.predecessors {
+                    if open.get(id.as_str()) == Some(&false) {
+                        diagnostics.push(Diagnostic::error(
+                            "event-opening-predecessor",
+                            Some(MANIFEST_FILENAME.into()),
+                            format!(
+                                "Event `{}` consumes `{id}` after it left the recorded Opening",
+                                event.component
+                            ),
+                        ));
+                    }
+                    open.insert(id, false);
+                }
+                for id in &transition.successors {
+                    if open.get(id.as_str()) == Some(&true) {
+                        diagnostics.push(Diagnostic::error("event-opening-successor", Some(MANIFEST_FILENAME.into()),
+                            format!("Event `{}` opens `{id}` while it is already open in the recorded flow", event.component)));
+                    }
+                    open.insert(id, true);
+                }
+            }
+            for child in event.children.iter().rev() {
+                stack.push(by_id[child.as_str()]);
+            }
         }
     }
     pub fn plan_change(&self, operation: ChangeOperation) -> Result<ChangeProposal> {
         Ok(self.prepare_change(operation)?.proposal)
     }
+
     fn prepare_change(&self, operation: ChangeOperation) -> Result<PreparedChange> {
         self.require_valid().map_err(|d| {
             anyhow!(
@@ -1385,8 +1511,6 @@ impl Project {
             description,
             relationship_parent,
             relationship_type,
-            event,
-            event_description,
         } = &operation;
         if !valid_component_id(component)
             || manifest.components.contains_key(component)
@@ -1406,9 +1530,6 @@ impl Project {
         if directory_parent(file) != directory_parent(&parent.path) {
             bail!("Opening branch must share its peer's actual immediate directory");
         }
-        if event_description.trim().is_empty() {
-            bail!("Event description must not be empty");
-        }
         manifest.components.insert(
             component.clone(),
             ComponentRegistration {
@@ -1424,14 +1545,6 @@ impl Project {
             direction: RelationshipDirection::SourceToTarget,
         });
         manifest.opening.files.push(component.clone());
-        // Carry the complete ordered Opening through the junction so its order
-        // remains explicit and unchanged while the new branch is appended.
-        manifest.evolve.events.push(EvolveEvent {
-            name: event.clone(),
-            description: Some(event_description.clone()),
-            predecessors: self.manifest.opening.files.clone(),
-            successors: manifest.opening.files.clone(),
-        });
         let source = serde_norway::to_string(&manifest)?;
         let candidate = self.candidate(&source)?;
         candidate
@@ -2225,18 +2338,6 @@ fn exact_event_prefix_boundary(
     .then_some(historical.len())
 }
 
-fn exact_event_name_prefix_boundary(
-    current: &[crate::model::EvolveEvent],
-    historical: &[crate::model::EvolveEvent],
-) -> Option<usize> {
-    (historical.len() <= current.len()
-        && historical
-            .iter()
-            .zip(current)
-            .all(|(historical, current)| historical.name == current.name))
-    .then_some(historical.len())
-}
-
 fn direction_allowed(constraint: DirectionConstraint, direction: RelationshipDirection) -> bool {
     match constraint {
         DirectionConstraint::Directional => direction == RelationshipDirection::SourceToTarget,
@@ -2618,6 +2719,33 @@ fn git_blob_text(root: &Path, commit: &str, path: &str) -> Result<String> {
         .with_context(|| format!("Git source `{path}` at `{commit}` is not valid UTF-8"))
 }
 
+fn git_timeline_records(root: &Path, head: &str) -> Result<Vec<TimelineCommit>> {
+    // One history walk, pinned to the retained observation. NUL-separated
+    // fields preserve multiline messages without a process per commit.
+    let output = git_output(root, &[
+        "log", "--first-parent", "--reverse", "--no-decorate", "--no-notes",
+        "--no-show-signature", "--encoding=UTF-8", "-z",
+        "--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%B",
+        head, "--",
+    ])?;
+    let fields: Vec<_> = output.split_terminator('\0').collect();
+    if fields.len() % 10 != 0 {
+        bail!("Invalid Git commit metadata record");
+    }
+    fields.chunks_exact(10).map(|fields| {
+        let parents = fields[1].split_whitespace().map(str::to_owned).collect::<Vec<_>>();
+        if !is_full_object_id(fields[0]) || parents.iter().any(|parent| !is_full_object_id(parent)) {
+            bail!("Invalid Git commit identity in history");
+        }
+        Ok(TimelineCommit {
+            commit: fields[0].into(), event_boundary: None,
+            author: GitIdentity {name: fields[2].into(), email: fields[3].into(), date: fields[4].into()},
+            committer: GitIdentity {name: fields[5].into(), email: fields[6].into(), date: fields[7].into()},
+            subject: fields[8].into(), message: fields[9].into(), parents,
+        })
+    }).collect()
+}
+
 fn git_output(root: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
         .arg("-C")
@@ -2693,7 +2821,13 @@ fn capture_project(root: &Path, source: Option<&str>) -> Result<ProjectCapture> 
         .iter()
         .map(|path| (path.clone(), capture_entry(root, path)))
         .collect::<BTreeMap<_, _>>();
-    let repository_files = git_worktree_files(root)?;
+    // Only visibility used by Region validation belongs to this observation.
+    // Unregistered file churn (for example an editor's temporary files) must
+    // not change its identity or invalidate loaded QC and volume measurements.
+    let repository_files = git_worktree_files(root)?
+        .into_iter()
+        .filter(|path| path == MANIFEST_FILENAME || paths.contains(path))
+        .collect();
     let mut ignored = BTreeSet::new();
     // Batch directory checks; file visibility is already captured by ls-files.
     let directories = entries
@@ -2958,9 +3092,13 @@ mod tests {
         assert!(region.timeline_commits.is_empty());
         let timeline = project.timeline_commits().unwrap();
         assert_eq!(timeline.len(), HISTORY_SIZE);
-        for (entry, commit) in timeline.iter().zip(&commits) {
+        for (index, (entry, commit)) in timeline.iter().zip(&commits).enumerate() {
             assert_eq!(&entry.commit, commit);
             assert_eq!(entry.event_boundary, Some(0));
+            assert_eq!(entry.subject, format!("Revision {index}"));
+            assert_eq!(entry.message.trim_end(), entry.subject);
+            assert_eq!(entry.author.name, "Mindflow Test");
+            assert_eq!(entry.parents, if index == 0 {vec![]} else {vec![commits[index - 1].clone()]});
         }
     }
 

@@ -1,5 +1,5 @@
-format: "2026-10-20"
-adopted-release: "2026.10.20"
+format: "2026-10-27"
+adopted-release: "2026.10.27"
 
 components:
   project:
@@ -48,6 +48,8 @@ components:
     index: true
   steer_project:
     path: "long_term_steering/project-development.md"
+  initial_direction:
+    path: evolve/initial-direction.md
 
 relationship-types:
   "is governed by":
@@ -110,19 +112,7 @@ opening:
 
 evolve:
   events:
-    - name: establish-project-development
-      description: Establish the encompassing development intent for {{PROJECT_NAME}}.
-      predecessors: []
-      successors:
-        - steer_project
-    - name: open-initial-design-authorities
-      description: Open product and architecture as parallel durable design intents while retaining project development.
-      predecessors:
-        - steer_project
-      successors:
-        - steer_project
-        - profile_product
-        - profile_architecture
-
-historical-components: {}
+    - component: initial_direction
+      opening:
+        successors: [steer_project, profile_product, profile_architecture]
 anchors: {}

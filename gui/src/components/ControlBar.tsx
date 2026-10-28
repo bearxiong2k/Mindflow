@@ -5,19 +5,14 @@ import {
 import {
   MindflowMark,
   StructureModeIcon,
-  TimelineFoldIcon,
   TimelineModeIcon,
 } from "./Icons";
-
-export type TimelineFoldAction = "fold" | "cancel";
 
 interface ControlBarProps {
   regionAvailable?: boolean;
   hasOpening?: boolean;
   regionOverviewOpen: boolean;
   interfaceScale: number;
-  timelineFoldAction?: TimelineFoldAction;
-  timelineFoldDisabled?: boolean;
   timelineAvailable?: boolean;
   timelineOpen?: boolean;
   qcOpen?: boolean;
@@ -26,8 +21,6 @@ interface ControlBarProps {
   onInterfaceScaleChange: (
     change: "decrease" | "increase" | "reset",
   ) => void;
-  onTimelineFoldAction?: () => void;
-  onTimelineUnfold?: () => void;
   onToggleTimeline?: () => void;
   onToggleRegionOverview: () => void;
 }
@@ -37,16 +30,12 @@ export function ControlBar({
   hasOpening = false,
   regionOverviewOpen,
   interfaceScale,
-  timelineFoldAction,
-  timelineFoldDisabled = false,
   timelineAvailable = false,
   timelineOpen = false,
   qcOpen = false,
   onToggleQc,
   onStructureToolbarHost,
   onInterfaceScaleChange,
-  onTimelineFoldAction,
-  onTimelineUnfold,
   onToggleTimeline,
   onToggleRegionOverview,
 }: ControlBarProps) {
@@ -113,13 +102,13 @@ export function ControlBar({
           data-timeline-toggle
           title={
             timelineOpen
-              ? "Close Timeline and return to Structure"
-              : "Open Timeline"
+              ? "Close Evolve and return to Structure"
+              : "Open Evolve"
           }
           onClick={onToggleTimeline}
         >
           <TimelineModeIcon />
-          <span>Timeline</span>
+          <span>Evolve</span>
         </button>
       ) : null}
 
@@ -130,38 +119,6 @@ export function ControlBar({
           inert={timelineOpen || qcOpen || undefined}
           ref={onStructureToolbarHost}
         />
-      ) : null}
-
-      {timelineFoldAction ? (
-        <button
-          type="button"
-          className={`timeline-fold-toggle${
-            timelineFoldAction === "fold" ? "" : " is-active"
-          }`}
-          aria-pressed={timelineFoldAction !== "fold"}
-          disabled={timelineFoldDisabled}
-          title={
-            timelineFoldAction === "cancel"
-              ? "Cancel folded-region endpoint selection"
-              : "Select two events or folded regions to fold one inclusive Timeline region"
-          }
-          onClick={onTimelineFoldAction}
-        >
-          <TimelineFoldIcon />
-          <span>{timelineFoldAction === "cancel" ? "Cancel" : "Fold"}</span>
-        </button>
-      ) : null}
-
-      {onTimelineUnfold ? (
-        <button
-          type="button"
-          className="timeline-fold-toggle"
-          title="Unfold the selected region, preserving any nested folds"
-          onClick={onTimelineUnfold}
-        >
-          <TimelineFoldIcon unfold />
-          <span>Unfold</span>
-        </button>
       ) : null}
 
       {onToggleQc ? (

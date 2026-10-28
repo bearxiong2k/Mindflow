@@ -820,18 +820,3 @@ test("Mermaid node and relationship text cannot escape generated labels", () => 
   assert.match(graph.source, /Canonical<br\/>&quot;quoted&quot; &lt;unsafe&gt;/);
   assert.match(graph.source, /governs&#124;unexpected/);
 });
-
-
-test("Anchor path correspondence preserves distinct current and historical Timeline identities", async () => {
-  const {timelineIdentitiesForPaths} = await import("./types.ts");
-  const graph = {documents:[
-    {component:"current",path:"docs/reused.md"},
-    {component:"another",path:"docs/other.md"},
-  ],historical_components:{
-    retired: {path:"docs/reused.md"},
-    old: {path:"gone.md"},
-  }};
-  assert.deepEqual(timelineIdentitiesForPaths(graph, ["docs/reused.md", "gone.md", "docs/reused.md"]),
-    ["current", "retired", "old"]);
-  assert.deepEqual(timelineIdentitiesForPaths(graph, ["unmanaged.md"]), []);
-});

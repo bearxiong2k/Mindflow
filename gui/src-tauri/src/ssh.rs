@@ -275,7 +275,7 @@ impl SshSessionManager {
                 != Some(snapshot)
             {
                 return Err(
-                    "Timeline requires the retained SSH Region snapshot; refresh the project first"
+                    "Evolve requires the retained SSH Region snapshot; refresh the project first"
                         .into(),
                 );
             }
@@ -288,7 +288,7 @@ impl SshSessionManager {
                 BridgeResult::TimelineHistory(mut report) => {
                     if report.root != access.root || report.snapshot.id != snapshot {
                         return Err(session.protocol_failure(
-                            "SSH Timeline history does not match the requested snapshot",
+                            "SSH Evolve history does not match the requested snapshot",
                         ));
                     }
                     report.root = encode_access_root(&access.destination, &report.root)?;
@@ -404,22 +404,6 @@ impl SshSessionManager {
                 other => Err(unexpected_result(session, "reader-snapshot", &other)),
             }
         })
-    }
-
-    pub fn reader_snapshot_current(
-        &self,
-        owner: &str,
-        access: &SshProjectAccess,
-        path: &str,
-    ) -> Result<ReaderProjectSnapshot, String> {
-        let snapshot =
-            self.with_session(owner, &access.destination, &access.root, false, |session| {
-                Ok(session
-                    .regions
-                    .get(&access.root)
-                    .map(|cached| cached.status.snapshot.id.clone()))
-            })?;
-        self.reader_snapshot(owner, access, path, snapshot.as_deref())
     }
 
     pub fn validate_reader_root(

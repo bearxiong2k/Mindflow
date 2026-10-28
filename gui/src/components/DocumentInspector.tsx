@@ -103,6 +103,7 @@ const MarkdownNavigationContext = createContext<MarkdownNavigation | null>(null)
 // Image bytes may change independently of the exact Markdown snapshot. Keep
 // this separate from navigation so unchanged prose does not need reparsing.
 export const ReaderImageRefreshContext = createContext(0);
+export const ReaderImageLoaderContext = createContext(loadReaderImage);
 
 type MarkdownLinkProps = ComponentPropsWithoutRef<"a"> & ExtraProps;
 type MarkdownImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
@@ -342,6 +343,7 @@ function MarkdownImage({
 }: MarkdownImageProps) {
   const navigation = useContext(MarkdownNavigationContext);
   const imageGeneration = useContext(ReaderImageRefreshContext);
+  const loadImage = useContext(ReaderImageLoaderContext);
   const previousProjectPathRef = useRef<string | undefined>(undefined);
   const canLoadProjectImage = navigation !== null;
   const destination = readerImageDestination(
@@ -391,7 +393,7 @@ function MarkdownImage({
 
     if (previousProjectPathRef.current !== destinationValue) setResolvedSource(undefined);
     previousProjectPathRef.current = destinationValue;
-    void loadReaderImage(destinationValue)
+    void loadImage(destinationValue)
       .then((dataUrl) => {
         if (!cancelled) setResolvedSource(dataUrl);
       })
@@ -411,6 +413,7 @@ function MarkdownImage({
     destinationValue,
     externalApproved,
     imageGeneration,
+    loadImage,
   ]);
 
   if (resolvedSource) {

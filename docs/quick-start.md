@@ -65,6 +65,14 @@ language remains accurate, and whether open concerns have been selected
 explicitly. Validation checks structure; it cannot decide that a design claim
 or an agent's judgment is correct.
 
+## Record a discussion when useful
+
+Write the discussion in an ordinary Markdown file, register its stable component
+ID, and select that ID in `evolve.events`. A summary can list finer Event IDs as
+its `children`; an optional `opening` record adds explicit file transitions.
+See the complete example in [Project format](project-format.md). No Event is
+required merely because you edited a file or changed current Opening.
+
 ## Continuing work
 
 For a bounded question, begin with a directory probe, then read its owners and

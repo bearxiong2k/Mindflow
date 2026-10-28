@@ -11,7 +11,7 @@ Core, CLI, and GUI work without it.
 
 ## Install the complete package
 
-The [2026.10.25 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.25) includes the complete package
+The [2026.10.27 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27) includes the complete package
 in its source and offers a separate skill archive:
 
 ```text
@@ -46,7 +46,7 @@ pass the exact destination to the installer:
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
 
-For the separate skill archive, extract it and enter `structuralist-2026.10.25/`.
+For the separate skill archive, extract it and enter `structuralist-2026.10.27/`.
 Run the same `./distribution/install-structuralist.sh` and `--check` commands
 there. The archive includes its installer and license notices. For manual
 installation, copy its complete `skills/structuralist/` directory into your
@@ -77,8 +77,9 @@ instructions and human decisions remain authoritative afterward.
 ## Recipe and adoption
 
 The included recipe is one optional worked arrangement, not a required document
-tree. Reuse existing owners before adding files. A small project may need only
-a few selected documents and no Opening or Event history yet.
+tree. It uses Markdown Events for discussions and nested summaries; use current
+design owners for accepted commitments, with ordinary links to their reasoning.
+Reuse existing owners before adding files. A small project may need only a few selected documents and no Opening or Event history yet.
 
 [First use](quick-start.md) separates CLI setup, skill installation, and project
 adoption. The current format uses one manifest and filesystem-derived hierarchy.

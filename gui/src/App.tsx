@@ -46,23 +46,15 @@ import { ProjectTabs } from "./components/ProjectTabs";
 import { SshOpenDialog } from "./components/SshOpenDialog";
 import { WorkspaceSplitView } from "./components/WorkspaceSplitView";
 import { CloseIcon, FolderIcon, MindflowMark } from "./components/Icons";
-import {
-  timelineFoldRangeBetween,
-  type TimelineFoldRange,
-} from "./openingPresentation";
 import { buildRelationshipContext } from "./inspection";
 import {
   createDefaultPresentationPreferences,
   loadPresentationPreferences,
   normalizeInterfaceScale,
   reconcilePresentationPreferences,
-  reconcileTimelineFoldPreferences,
   savePresentationPreferences,
   stepInterfaceScale,
   type StructureNavigationPreferences,
-  timelineFoldPreferenceFromRange,
-  timelineFoldPreferenceKey,
-  timelineFoldRangesFromPreferences,
 } from "./presentationPreferences";
 import type { ReaderNavigationMode } from "./readerNavigation";
 import {
@@ -71,7 +63,6 @@ import {
   type ProjectMapNavigationRequest,
 } from "./projectFilesNavigation";
 import { listenForWorkspaceReaderEvents } from "./readerWindowEvents";
-import type { TimelinePanelLayout } from "./timelineInteraction";
 import {
   clearProjectTabOpenError,
   closeProjectTab,
@@ -98,7 +89,7 @@ import { CURRENT_PROJECT_FORMAT } from "./types";
 
 const unregisteredGraph: GraphData = {
   format: CURRENT_PROJECT_FORMAT, structure: {nodes: [],relationships: []}, documents: [],
-  relationship_types: {}, anchor_connection_types: {}, historical_components: {}, events: [], anchors: {},
+  historical_components: {}, relationship_types: {}, anchor_connection_types: {}, events: [], anchors: {},
 };
 const TimelineView = lazy(() =>
   import("./components/TimelineView").then((module) => ({
@@ -119,14 +110,6 @@ function defaultDocumentPath(response: RegionResponse): string {
     response.graph.documents.find((document) => document.index)?.path ??
     response.graph.documents[0]?.path ??
     ""
-  );
-}
-
-function protectedTimelineEventBoundaries(
-  region: Pick<RegionResponse, "anchor_timeline">,
-): number[] {
-  return region.anchor_timeline.flatMap((slice) =>
-    slice.event_boundary === null ? [] : [slice.event_boundary],
   );
 }
 
@@ -287,11 +270,6 @@ function InitializedEmptyRegionScreen() {
 interface WorkspaceHandle {
   refresh: () => Promise<void>;
   reload: () => Promise<void>;
-}
-
-interface TimelineFoldSelectionState {
-  active: boolean;
-  firstEndpoint?: TimelineFoldRange;
 }
 
 interface FolderWorkspaceProps {
@@ -576,15 +554,15 @@ const RegionWorkspace = forwardRef<
         initialRegion.graph,
       ),
       initialRegion.graph,
-      protectedTimelineEventBoundaries(initialRegion),
     ),
   );
   const {
     interfaceScale,
     structure: structureNavigation,
     structureMetrics,
-    timelinePanels,
-    timelineFolds,
+    expandedEvents,
+    evolveInspectorHeight,
+    evolveRailWidth,
     files,
   } = presentationPreferences;
   const metrics = useStructureMetrics(region.root, snapshotId, measurementGeneration,
@@ -623,7 +601,7 @@ const RegionWorkspace = forwardRef<
     const focusId = filesNavigationIndex.focusIdByDirectory.get(path);
     if (!focusId) return;
     setNavigationHover(undefined);
-    // Files browsing remains available without dismissing Timeline or moving
+    // Files browsing remains available without dismissing Evolve or moving
     // the covered Structure canvas. The user explicitly closes that layer.
     if (timelineOpen || qcOpen) return;
     setMapNavigationRequest((current) => ({
@@ -634,24 +612,6 @@ const RegionWorkspace = forwardRef<
   const [regionOverviewOpen, setRegionOverviewOpen] = useState(false);
   const [structureToolbarHost, setStructureToolbarHost] =
     useState<HTMLDivElement | null>(null);
-  const [timelineFoldSelection, setTimelineFoldSelection] =
-    useState<TimelineFoldSelectionState>({ active: false });
-  const [selectedTimelineFold, setSelectedTimelineFold] =
-    useState<TimelineFoldRange>();
-  const [timelineFoldNotice, setTimelineFoldNotice] = useState<string>();
-  const timelineProtectedEventBoundaries = useMemo(
-    () => protectedTimelineEventBoundaries(region),
-    [region.anchor_timeline],
-  );
-  const timelineFoldRanges = useMemo(
-    () =>
-      timelineFoldRangesFromPreferences(
-        timelineFolds,
-        graph.events,
-        timelineProtectedEventBoundaries,
-      ),
-    [graph.events, timelineFolds, timelineProtectedEventBoundaries],
-  );
 
   useEffect(() => {
     setRegionError(openError);
@@ -679,9 +639,6 @@ const RegionWorkspace = forwardRef<
       setHoveredInspection(undefined);
       setNavigationHover(undefined);
       setMapNavigationRequest(undefined);
-      setTimelineFoldSelection({ active: false });
-      setSelectedTimelineFold(undefined);
-      setTimelineFoldNotice(undefined);
       if (!preservePresentation) setTimelineOpen(false);
       setSelectedPath((current) =>
         preservePresentation && isManaged(current) ? current : fallbackPath,
@@ -694,7 +651,6 @@ const RegionWorkspace = forwardRef<
           ? reconcilePresentationPreferences(
               current,
               response.graph,
-              protectedTimelineEventBoundaries(response),
             )
           : createDefaultPresentationPreferences(response.graph),
       );
@@ -975,110 +931,17 @@ const RegionWorkspace = forwardRef<
     }));
   }, []);
 
-  const unfoldTimelineSelection = useCallback(() => {
-    if (selectedTimelineFold) {
-      const selectedPreference = timelineFoldPreferenceFromRange(
-        selectedTimelineFold,
-        graph.events,
-      );
-      if (selectedPreference) {
-        const selectedKey = timelineFoldPreferenceKey(selectedPreference);
-        setPresentationPreferences((current) => ({
-          ...current,
-          timelineFolds: current.timelineFolds.filter(
-            (preference) =>
-              timelineFoldPreferenceKey(preference) !== selectedKey,
-          ),
-        }));
-      }
-      setSelectedTimelineFold(undefined);
-      setTimelineFoldSelection({ active: false });
-      setTimelineFoldNotice(undefined);
-    }
-  }, [graph.events, selectedTimelineFold]);
+  const updateExpandedEvents = useCallback((expandedEvents: string[]) => {
+    setPresentationPreferences(current => ({ ...current, expandedEvents }));
+  }, []);
 
-  const toggleTimelineFold = useCallback(() => {
-    if (timelineFoldSelection.active) {
-      setTimelineFoldSelection({ active: false });
-      setTimelineFoldNotice(undefined);
-      return;
-    }
-    setSelectedTimelineFold(undefined);
-    setTimelineFoldSelection({ active: true });
-    setTimelineFoldNotice(undefined);
-  }, [timelineFoldSelection.active]);
+  const updateEvolveInspectorHeight = useCallback((evolveInspectorHeight: number) => {
+    setPresentationPreferences(current => ({ ...current, evolveInspectorHeight }));
+  }, []);
 
-  const selectTimelineFoldEndpoint = useCallback(
-    (endpoint: TimelineFoldRange) => {
-      if (!timelineFoldSelection.active) return;
-      const firstEndpoint = timelineFoldSelection.firstEndpoint;
-      if (!firstEndpoint) {
-        setTimelineFoldSelection({ active: true, firstEndpoint: endpoint });
-        setTimelineFoldNotice(undefined);
-        return;
-      }
-
-      const result = timelineFoldRangeBetween(
-        firstEndpoint,
-        endpoint,
-        graph.events.length,
-        timelineProtectedEventBoundaries,
-        timelineFoldRanges,
-      );
-      if (!result.ok) {
-        setTimelineFoldSelection({ active: true });
-        setTimelineFoldNotice(
-          result.reason === "crosses-anchor"
-            ? "That interval crosses an aligned anchor boundary. Choose endpoints within one anchor slice."
-            : result.reason === "overlaps-fold"
-              ? "Choose endpoints that include each existing fold in full."
-              : "Choose two different events or folded regions as endpoints.",
-        );
-        return;
-      }
-
-      const preference = timelineFoldPreferenceFromRange(
-        result.range,
-        graph.events,
-      );
-      if (!preference) {
-        setTimelineFoldSelection({ active: true });
-        setTimelineFoldNotice(
-          "That interval no longer resolves to the current event sequence.",
-        );
-        return;
-      }
-      setPresentationPreferences((current) => ({
-        ...current,
-        timelineFolds: reconcileTimelineFoldPreferences(
-          [...current.timelineFolds, preference],
-          graph.events,
-          timelineProtectedEventBoundaries,
-        ),
-      }));
-      setTimelineFoldSelection({ active: false });
-      setSelectedTimelineFold(result.range);
-      setTimelineFoldNotice(undefined);
-    },
-    [
-      graph.events,
-      timelineFoldRanges,
-      timelineFoldSelection,
-      timelineProtectedEventBoundaries,
-    ],
-  );
-
-  const timelineFoldAction = timelineFoldSelection.active ? "cancel" : "fold";
-
-  const updateTimelinePanels = useCallback(
-    (timelinePanels: TimelinePanelLayout) => {
-      setPresentationPreferences((current) => ({
-        ...current,
-        timelinePanels,
-      }));
-    },
-    [],
-  );
+  const updateEvolveRailWidth = useCallback((evolveRailWidth: number) => {
+    setPresentationPreferences(current => ({ ...current, evolveRailWidth }));
+  }, []);
 
   const updateStructureNavigation = useCallback(
     (structure: StructureNavigationPreferences) => {
@@ -1104,9 +967,6 @@ const RegionWorkspace = forwardRef<
       return;
     }
     setTimelineOpen((current) => !current);
-    setTimelineFoldSelection({ active: false });
-    setSelectedTimelineFold(undefined);
-    setTimelineFoldNotice(undefined);
   }, [qcOpen]);
 
   const toggleQc = useCallback(() => {
@@ -1149,26 +1009,14 @@ const RegionWorkspace = forwardRef<
             hasOpening={region.opening.files.length > 0}
             regionOverviewOpen={regionOverviewOpen}
             interfaceScale={interfaceScale}
-            timelineFoldAction={
-              timelineOpen && !qcOpen
-                ? timelineFoldAction
-                : undefined
-            }
-            timelineFoldDisabled={graph.events.length < 2}
             timelineAvailable={
-              timelineOpen || graph.events.length > 0 || Object.keys(graph.anchors).length > 0
+              timelineOpen || graph.events.length > 0 || region.opening.files.length > 0 || Object.keys(graph.anchors).length > 0
             }
             timelineOpen={timelineOpen && !qcOpen}
             qcOpen={qcOpen}
             onToggleQc={toggleQc}
             onStructureToolbarHost={setStructureToolbarHost}
             onInterfaceScaleChange={changeInterfaceScale}
-            onTimelineFoldAction={toggleTimelineFold}
-            onTimelineUnfold={
-              timelineOpen && !qcOpen && selectedTimelineFold && !timelineFoldSelection.active
-                ? unfoldTimelineSelection
-                : undefined
-            }
             onToggleTimeline={toggleTimeline}
             onToggleRegionOverview={() =>
               setRegionOverviewOpen((current) => !current)
@@ -1236,33 +1084,33 @@ const RegionWorkspace = forwardRef<
               {timelineOpen ? (
                 <section
                   className="structure-timeline-layer"
-                  aria-label="Evolve Timeline"
+                  aria-label="Evolve workspace"
                   aria-hidden={qcOpen || undefined}
                   inert={qcOpen || undefined}
                 >
                   <Suspense
                     fallback={
                       <div className="workspace-layer-loading" role="status">
-                        Forming Timeline…
+                        Forming Evolve…
                       </div>
                     }
                   >
                     <TimelineView
                       graph={graph}
+                      opening={region.opening}
                       anchorTimeline={region.anchor_timeline}
                       commits={timelineHistory.commits}
                       historyLoading={timelineHistory.loading}
                       historyError={timelineHistory.error}
                       onRetryHistory={timelineHistory.retry}
-                      panelLayout={timelinePanels}
-                      foldRanges={timelineFoldRanges}
-                      foldSelection={timelineFoldSelection}
-                      selectedFoldRange={selectedTimelineFold}
-                      protectedEventBoundaries={timelineProtectedEventBoundaries}
-                      foldNotice={timelineFoldNotice}
-                      onPanelLayoutChange={updateTimelinePanels}
-                      onFoldEndpoint={selectTimelineFoldEndpoint}
-                      onSelectedFoldRangeChange={setSelectedTimelineFold}
+                      root={region.root}
+                      snapshot={snapshotId}
+                      expandedEvents={expandedEvents}
+                      onExpandedEventsChange={updateExpandedEvents}
+                      railWidth={evolveRailWidth}
+                      onRailWidthChange={updateEvolveRailWidth}
+                      inspectorHeight={evolveInspectorHeight}
+                      onInspectorHeightChange={updateEvolveInspectorHeight}
                       onSelect={selectDocument}
                       onClose={toggleTimeline}
                     />

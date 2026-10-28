@@ -531,9 +531,9 @@ fn empty_reader_graph() -> GraphData {
             relationships: Vec::new(),
         },
         documents: Vec::new(),
+        historical_components: BTreeMap::new(),
         relationship_types: BTreeMap::new(),
         anchor_connection_types: BTreeMap::new(),
-        historical_components: BTreeMap::new(),
         events: Vec::new(),
         anchors: BTreeMap::new(),
     }

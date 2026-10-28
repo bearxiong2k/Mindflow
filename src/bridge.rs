@@ -13,7 +13,7 @@ use crate::human::{
 };
 use crate::Project;
 
-pub const PROTOCOL_VERSION: u32 = 7;
+pub const PROTOCOL_VERSION: u32 = 10;
 pub const MAX_FRAME_BYTES: usize = 48 * 1024 * 1024;
 pub const STDERR_LIMIT_BYTES: usize = 64 * 1024;
 pub const REQUIRED_CAPABILITIES: [&str; 7] = [
@@ -21,9 +21,9 @@ pub const REQUIRED_CAPABILITIES: [&str; 7] = [
     "project-files-v1",
     "qc-v2",
     "reader-v3",
-    "region-v5",
+    "region-v7",
     "snapshot-v2",
-    "timeline-v1",
+    "timeline-v4",
 ];
 
 #[derive(Debug, Serialize, Deserialize)]

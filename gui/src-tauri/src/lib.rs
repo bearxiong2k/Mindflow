@@ -472,6 +472,26 @@ fn reader_image_data_url_for_access(
     }
 }
 
+fn project_image_data_url_for_access(
+    owner: &str,
+    ssh_sessions: &SshSessionManager,
+    local_projects: &LocalProjectStore,
+    root: &str,
+    snapshot: &str,
+    path: &str,
+) -> Result<String, String> {
+    match parse_access_root(root)? {
+        Some(access) => {
+            ssh_sessions.validate_reader_root(owner, &access, Some(snapshot))?;
+        }
+        None => {
+            let canonical = local_projects.canonical_root(root)?;
+            local_projects.retained_project(owner, &canonical, snapshot)?;
+        }
+    }
+    reader_image_data_url_for_access(owner, ssh_sessions, root, path)
+}
+
 fn reader_image_data_url_for(root: &Path, path: &str) -> Result<String, String> {
     human::reader_image_data_url(root, path)
 }
@@ -1190,8 +1210,22 @@ fn reader_image_data_url(
     window: WebviewWindow,
     controller: tauri::State<'_, DesktopController>,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
+    local_projects: tauri::State<'_, LocalProjectStore>,
     path: String,
+    root: Option<String>,
+    snapshot: Option<String>,
 ) -> Result<String, String> {
+    if let Some(root) = root {
+        let snapshot = snapshot.ok_or("project image request must name its retained snapshot")?;
+        return project_image_data_url_for_access(
+            window.label(),
+            &ssh_sessions,
+            &local_projects,
+            &root,
+            &snapshot,
+            &path,
+        );
+    }
     let session = controller
         .reader_session(window.label())?
         .ok_or_else(|| format!("Mindflow window '{}' is not a Reader", window.label()))?;
@@ -1611,15 +1645,20 @@ fn list_project_directory(
 fn read_document(
     window: WebviewWindow,
     ssh_sessions: tauri::State<'_, SshSessionManager>,
+    local_projects: tauri::State<'_, LocalProjectStore>,
     root: String,
     path: String,
+    snapshot: String,
 ) -> Result<DocumentResponse, String> {
-    match parse_access_root(&root)? {
-        Some(access) => Ok(ssh_sessions
-            .reader_snapshot_current(window.label(), &access, &path)?
-            .document),
-        None => human::read_managed_document(root, &path),
-    }
+    Ok(reader_project_snapshot_for_access(
+        window.label(),
+        &ssh_sessions,
+        &local_projects,
+        &root,
+        &path,
+        Some(&snapshot),
+    )?
+    .document)
 }
 
 fn wait_for_relaunch_parent(arguments: Vec<OsString>) -> Vec<OsString> {
@@ -1879,7 +1918,7 @@ mod tests {
         );
         format!(
             concat!(
-                "format: \"2026-10-20\"\n",
+                "format: \"2026-10-27\"\n",
                 "components:\n",
                 "  project: {{path: .}}\n",
                 "  notes: {{path: notes}}\n",
@@ -1892,12 +1931,7 @@ mod tests {
                 "    - current_note\n",
                 "evolve:\n",
                 "  events:\n",
-                "    - name: establish-current\n",
-                "      description: Establish the representative current intent.\n",
-                "      predecessors: []\n",
-                "      successors:\n",
-                "        - current_note\n",
-                "historical-components: {{}}\n",
+                "    - component: current_note\n",
                 "{anchors}",
             ),
             anchors = anchors,
@@ -2002,6 +2036,38 @@ mod tests {
             .anchor_timeline
             .iter()
             .any(|anchor| { anchor.name == "review-point" && anchor.event_boundary == Some(1) }));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn desktop_timeline_preserves_commit_message_identity_and_captured_head() {
+        let root = representative_region("commit-details");
+        let base = fixture_git(&root, &["rev-parse", "HEAD"]);
+        let message = "Clarify the timeline\n\nA multiline Git comment.\n保留原文 <details> & %s.";
+        fixture_git(&root, &[
+            "-c", "user.name=Commit Recorder", "-c", "user.email=recorder@example.invalid",
+            "commit", "--quiet", "--allow-empty", "--author=Project Author <author@example.invalid>",
+            "--date=2026-10-27T08:09:10+08:00", "-m", message,
+        ]);
+        let head = fixture_git(&root, &["rev-parse", "HEAD"]);
+        let project = Project::load(root.clone()).unwrap();
+        fixture_git(&root, &[
+            "-c", "user.name=Later Recorder", "-c", "user.email=later@example.invalid",
+            "commit", "--quiet", "--allow-empty", "-m", "Later commit outside the captured snapshot",
+        ]);
+        let history = human::timeline_history(&project).unwrap();
+        let entry = history.commits.last().unwrap();
+        assert_eq!(entry.commit, head);
+        assert_eq!(entry.subject, "Clarify the timeline");
+        assert_eq!(entry.message, format!("{message}\n"));
+        assert_eq!(entry.author.name, "Project Author");
+        assert_eq!(entry.author.email, "author@example.invalid");
+        assert_eq!(entry.author.date, "2026-10-27T08:09:10+08:00");
+        assert_eq!(entry.committer.name, "Commit Recorder");
+        assert_eq!(entry.committer.email, "recorder@example.invalid");
+        assert!(!entry.committer.date.is_empty());
+        assert_eq!(entry.parents, [base]);
+        assert!(history.commits.first().unwrap().parents.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -2172,6 +2238,25 @@ mod tests {
         let second = local_projects.load_region("workspace-2", &root).unwrap();
         assert_ne!(first_id, second.status.snapshot.id);
         assert_eq!(local_projects.projects().unwrap().len(), 2);
+        let first_event = reader_project_snapshot_for_access(
+            "main", &ssh_sessions, &local_projects, &first.root, "notes/current.md", Some(&first_id),
+        ).unwrap();
+        assert_eq!(first_event.document.content, original);
+        let second_event = reader_project_snapshot_for_access(
+            "workspace-2", &ssh_sessions, &local_projects, &second.root, "notes/current.md", Some(&second.status.snapshot.id),
+        ).unwrap();
+        assert_eq!(second_event.document.content, "# A newer window observation\n");
+        assert!(reader_project_snapshot_for_access(
+            "main", &ssh_sessions, &local_projects, &first.root, "notes/current.md", Some(&second.status.snapshot.id),
+        ).is_err());
+        fs::write(root.join("notes/picture.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
+        assert!(project_image_data_url_for_access(
+            "main", &ssh_sessions, &local_projects, &first.root, &first_id, "notes/picture.svg",
+        ).unwrap().starts_with("data:image/svg+xml;base64,"));
+        assert!(project_image_data_url_for_access(
+            "main", &ssh_sessions, &local_projects, &first.root, &second.status.snapshot.id, "notes/picture.svg",
+        ).is_err());
+
         let first_reader =
             reader_window_snapshot_for_access(&ssh_sessions, &local_projects, reader.clone()).unwrap();
         assert_eq!(first_reader.document.content, original);
@@ -2312,6 +2397,42 @@ mod tests {
             2,
             "a later explicit open can load again"
         );
+        fs::remove_dir_all(fixture).unwrap();
+    }
+
+    #[test]
+    fn passive_reload_preserves_measurements_during_unregistered_file_churn() {
+        let fixture = representative_region("passive-file-churn");
+        let root = fixture.canonicalize().unwrap();
+        let store = LocalProjectStore::default();
+        let first = store.load_region("main", &root).unwrap();
+        let peer = store.load_region("workspace-2", &root).unwrap();
+        for present in [true, false, true] {
+            let temporary = root.join("notes/background-output.log");
+            if present {
+                fs::write(&temporary, "background output\n").unwrap();
+            } else {
+                fs::remove_file(&temporary).unwrap();
+            }
+            let refreshed = reconstruct_project_path(
+                "main",
+                first.root.clone(),
+                &SshSessionManager::default(),
+                &store,
+                false,
+            )
+            .unwrap();
+            let RefreshProjectResponse::Region { region } = refreshed else {
+                panic!("passive reload lost the Region");
+            };
+            assert_eq!(region.status.snapshot, first.status.snapshot);
+            for (owner, snapshot) in [("main", &first), ("workspace-2", &peer)] {
+                let retained = store
+                    .retained_project(owner, &snapshot.root, &snapshot.status.snapshot.id)
+                    .unwrap();
+                assert_eq!(retained.snapshot_identity(), &first.status.snapshot);
+            }
+        }
         fs::remove_dir_all(fixture).unwrap();
     }
 

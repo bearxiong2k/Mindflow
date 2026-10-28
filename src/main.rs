@@ -1227,11 +1227,13 @@ fn evolve_events(
         );
         for (index, event) in events.iter().enumerate() {
             println!("  {}. {}", offset + index + 1, event.name);
-            if let Some(description) = &event.description {
-                println!("     {description}");
+            println!("     Component: {}", event.component);
+            println!("     File: {}", event.file);
+            print_intent_paths("Children", &event.children);
+            if let Some(transition) = &event.opening {
+                print_intent_paths("Opening predecessors", &transition.predecessors);
+                print_intent_paths("Opening successors", &transition.successors);
             }
-            print_intent_paths("Predecessors", &event.predecessors);
-            print_intent_paths("Successors", &event.successors);
         }
     }
 

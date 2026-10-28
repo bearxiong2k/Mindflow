@@ -28,7 +28,7 @@ copy those files merely because the reference is useful.
 | `canonical_docs/` | Current implementation-facing meaning |
 | `long_term_steering/` | Developing direction |
 | `deferred_questions/` | Protected unresolved choices |
-| `design_discussion/` | Retained decision reasoning |
+| `evolve/` | Event discussions and authored summaries |
 | `trim_manual/` | Reusable maintenance guidance |
 
 These are possible responsibilities, not evidence that the target needs every
@@ -50,7 +50,7 @@ its directories into levels:
 | Durable interpretation | `profiles/` |
 | Exact current commitment | `canonical_docs/` |
 | Formal realization and direct evidence | Project implementation, artifacts, and tests outside the recipe |
-| Retained decision evidence | `design_discussion/` after the accepted consequence has an ordinary owner |
+| Retained decision evidence | `evolve/`, with links to current owners when consequences settle |
 | Cross-gradient governance and working invariants | `governance/Documentation.md` and concise `AGENTS.md` guidance |
 | Reusable project-specific maintenance experience | `trim_manual/` |
 | Minimal Structure and SOE metadata | `MINDFLOW.yaml` over the ordinary filesystem; generated views |
@@ -86,7 +86,7 @@ Some responsibilities remain peer, cross-cutting, unresolved, or unnecessary.
 
 ## Optional materialization
 
-The assets target format `2026-10-20` only. Confirm that the selected executable supports
+The assets target format `2026-10-27` only. Confirm that the selected executable supports
 the single-manifest contract before claiming a valid materialization. Earlier
 projects require a separately reviewed manual adoption; no fallback carrier or
 automatic converter is included.
@@ -108,7 +108,8 @@ subset that remains coherent after adaptation.
   markers. Let disk supply names, entry kinds, containment, and folder roles.
   Update path bindings and ordinary links together on a move; preserve IDs and
   deliberately repair affected relationships and SOE references.
-- Reconcile folder-local relationships, Opening, Events, historical identities,
+- Reconcile folder-local relationships, Opening, Event discussions and summary groups,
+  any retained transition participants and historical identities,
   and Anchors with the actual document system. Preserve relationship vocabulary
   where it adds meaning beyond placement. Keep procedure in ordinary guidance.
 - Generate Mermaid after validating the result; do not maintain or round-trip a

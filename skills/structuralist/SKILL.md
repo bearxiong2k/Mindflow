@@ -106,7 +106,7 @@ Also route a direct named or functional request through this compact match:
 | Current implementation-facing meaning | `canonical_docs/` |
 | Developing direction or Opening | `long_term_steering/` |
 | A protected unresolved choice | `deferred_questions/` |
-| Retained decision reasoning | `design_discussion/` |
+| Retained decision reasoning | `evolve/` |
 | Reusable maintenance guidance | `trim_manual/` |
 
 Match by responsibility, not literal wording. A direct match loads the recipe

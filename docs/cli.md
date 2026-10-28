@@ -1,7 +1,7 @@
 # CLI
 
 The CLI reconstructs one project-owned Region from ordinary files, its manifest,
-and Git. Commands below describe source release `2026.10.25`. Use
+and Git. Commands below describe source release `2026.10.27`. Use
 `mindflow --help` and each subcommand's `--help` for exact options.
 
 ## Select a project and inspect it
@@ -59,8 +59,10 @@ mindflow evolve events --offset 0 --limit 64 --json
 mindflow anchor list
 ```
 
-Events are authored transformations, not inferred commits. To select exact
-historical evidence for one request:
+Events select registered Markdown discussions by component ID, with optional
+ordered children and Opening transitions. Pages preserve registry order; the
+nested reading order follows roots and their child lists. Read a discussion
+with `topology read EVENT_ID`. To select exact historical evidence for one request:
 
 ```sh
 mindflow evolve select \
@@ -93,8 +95,9 @@ validate their complete result with `check --json`.
 
 For the narrow typed `open-opening-branch` operation, `change plan --input-json
 FILE` produces a proposal and `change apply --input-json FILE` applies a matching
-proposal. This is not a general document editor. Consult command help before
-using it; an invalid or stale proposal writes nothing.
+proposal. It changes the current Opening and leaves Evolve untouched; author
+Events through ordinary Markdown and manifest edits. This is not a general
+document editor. Consult command help before using it; an invalid or stale proposal writes nothing.
 
 `mindflow update-handoff` prints release-specific manual adoption guidance. It
 works without loading an old project and rejects `--root`. There is no automatic

@@ -24,7 +24,7 @@ impl Fixture {
         fixture.write("docs/b.md", "# B\n");
         fixture.write("docs/c.md", "# C\n");
         fixture.manifest(
-            "format: \"2026-10-20\"\ncomponents:\n  a: {path: docs/a.md}\n  b: {path: docs/b.md}\n",
+            "format: \"2026-10-27\"\ncomponents:\n  a: {path: docs/a.md}\n  b: {path: docs/b.md}\n",
         );
         fixture
     }
@@ -81,6 +81,85 @@ fn qc_commit(fixture: &Fixture, message: &str) -> String {
 }
 fn git_directory(fixture: &Fixture) -> PathBuf {
     PathBuf::from(git(&fixture.0, &["rev-parse", "--absolute-git-dir"]))
+}
+
+#[test]
+fn unregistered_file_churn_preserves_the_qc_snapshot() {
+    let fixture = Fixture::base();
+    qc_commit(&fixture, "baseline");
+    let before = fixture.valid();
+    let report = mindflow::documentation_qc::observe_window(
+        &before,
+        mindflow::documentation_qc::QcWindow::Recent { commits: 5 },
+    )
+    .unwrap();
+
+    // Background tools can create files without changing the registered Region.
+    // Include a sibling beneath a required ancestor, not only root-level noise.
+    fixture.write("build-session.log", "background output\n");
+    fixture.write("docs/scratch.md", "Unregistered notes\n");
+    fixture.write("docs/c.md", "Changed unregistered prose\n");
+    fixture.write(".gitignore", "build-session.log\n");
+    git(&fixture.0, &["add", "docs/scratch.md"]);
+    let after = fixture.valid();
+    assert_eq!(before.snapshot_identity(), after.snapshot_identity());
+    let repeated = mindflow::documentation_qc::observe_window(
+        &after,
+        mindflow::documentation_qc::QcWindow::Recent { commits: 5 },
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(report).unwrap(),
+        serde_json::to_value(repeated).unwrap()
+    );
+
+    fs::remove_file(fixture.0.join("docs/c.md")).unwrap();
+    git(&fixture.0, &["rm", "--cached", "docs/c.md"]);
+    assert_eq!(
+        before.snapshot_identity(),
+        fixture.valid().snapshot_identity()
+    );
+
+    // Actual measured inputs and Git history still invalidate the observation.
+    fixture.write("docs/a.md", "# Updated registered prose\n");
+    assert_ne!(
+        before.snapshot_identity(),
+        fixture.valid().snapshot_identity()
+    );
+    fixture.write("docs/a.md", "# A\n\nExact prose.\n");
+    assert_eq!(
+        before.snapshot_identity(),
+        fixture.valid().snapshot_identity()
+    );
+    qc_commit(&fixture, "unregistered files only");
+    assert_ne!(
+        before.snapshot_identity(),
+        fixture.valid().snapshot_identity()
+    );
+}
+
+#[test]
+fn registered_git_visibility_still_invalidates_the_snapshot() {
+    let fixture = Fixture::base();
+    let before = fixture.valid();
+    for (pattern, diagnostic) in [
+        ("docs/a.md\n", "component-ignored"),
+        ("docs/\n", "component-ignored"),
+        ("MINDFLOW.yaml\n", "manifest-git-visible"),
+    ] {
+        fixture.write(".gitignore", pattern);
+        let after = Project::load(fixture.0.clone()).unwrap();
+        assert_ne!(before.snapshot_identity(), after.snapshot_identity());
+        assert!(after
+            .diagnostics()
+            .iter()
+            .any(|entry| entry.code == diagnostic));
+    }
+    fixture.write(".gitignore", "docs/c.md\n");
+    assert_eq!(
+        before.snapshot_identity(),
+        fixture.valid().snapshot_identity()
+    );
 }
 
 fn qc_cache_file(fixture: &Fixture) -> PathBuf {

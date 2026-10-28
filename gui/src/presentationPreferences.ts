@@ -1,12 +1,5 @@
+import { normalizeEvolveRailWidth, DEFAULT_EVOLVE_RAIL_WIDTH } from "./timelineInteraction.ts";
 import { projectMapFor } from "./projectMapNavigation.ts";
-import {
-  timelineFoldRangeBetween,
-  type TimelineFoldRange,
-} from "./openingPresentation.ts";
-import {
-  MINIMUM_TIMELINE_INSPECTOR_HEIGHT,
-  type TimelinePanelLayout,
-} from "./timelineInteraction.ts";
 import {
   projectMapChildrenByParent,
   projectMapComponentIsAggregate,
@@ -14,6 +7,7 @@ import {
 } from "./projectMapNavigation.ts";
 import type { EvolveEvent, GraphData } from "./types.ts";
 import { normalizeStructureMetricsCommits } from "./projectMapMetrics.ts";
+import { normalizeEvolveInspectorHeight, DEFAULT_EVOLVE_INSPECTOR_HEIGHT } from "./eventTimeline.ts";
 import {
   DEFAULT_FILES_SIDEBAR_WIDTH,
   normalizeFilesSidebarWidth,
@@ -32,17 +26,13 @@ export interface StructureNavigationPreferences {
   reversedLayoutFocusIds: Set<string>;
 }
 
-export interface TimelineFoldPreference {
-  startEventName: string;
-  endEventName: string;
-}
-
 export interface PresentationPreferences {
   interfaceScale: number;
   structure: StructureNavigationPreferences;
   structureMetrics: { enabled: boolean; commits: number };
-  timelinePanels: TimelinePanelLayout;
-  timelineFolds: TimelineFoldPreference[];
+  expandedEvents: string[];
+  evolveInspectorHeight: number;
+  evolveRailWidth: number;
   files: FilesNavigationPreferences;
 }
 
@@ -66,11 +56,9 @@ interface StoredPresentationPreferences {
     reversedLayoutFocusIds?: string[];
   };
   structureMetrics?: { enabled?: boolean; commits?: number };
-  timelinePanels?: TimelinePanelLayout;
-  timelineFolds?: Array<{
-    startEventName: string;
-    endEventName: string;
-  }>;
+  expandedEvents?: string[];
+  evolveInspectorHeight?: number;
+  evolveRailWidth?: number;
   files?: {
     expandedPaths?: string[];
     selectedPath?: string;
@@ -94,160 +82,9 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-function normalizedTimelinePanelHeight(
-  value: unknown,
-  minimum: number,
-): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  return Math.round(Math.min(4_000, Math.max(minimum, value)) * 10) / 10;
-}
-
-function storedTimelinePanelLayout(value: unknown): TimelinePanelLayout {
-  const stored = isRecord(value) ? value : {};
-  return {
-    inspectorHeight: normalizedTimelinePanelHeight(
-      stored.inspectorHeight,
-      MINIMUM_TIMELINE_INSPECTOR_HEIGHT,
-    ),
-  };
-}
-
-export function timelineFoldPreferenceKey(
-  preference: TimelineFoldPreference,
-): string {
-  return JSON.stringify([
-    preference.startEventName,
-    preference.endEventName,
-  ]);
-}
-
-export function timelineFoldPreferenceFromRange(
-  range: TimelineFoldRange,
-  events: readonly EvolveEvent[],
-): TimelineFoldPreference | undefined {
-  if (
-    !Number.isInteger(range.startEventIndex) ||
-    !Number.isInteger(range.endEventIndex) ||
-    range.startEventIndex < 0 ||
-    range.startEventIndex >= range.endEventIndex ||
-    range.endEventIndex >= events.length
-  ) {
-    return undefined;
-  }
-  return {
-    startEventName: events[range.startEventIndex].name,
-    endEventName: events[range.endEventIndex].name,
-  };
-}
-
-export function reconcileTimelineFoldPreferences(
-  current: readonly TimelineFoldPreference[],
-  events: readonly EvolveEvent[],
-  protectedEventBoundaries: readonly number[] = [],
-): TimelineFoldPreference[] {
-  const eventIndexes = new Map(
-    events.map((event, index) => [event.name, index]),
-  );
-  const candidates = current.flatMap((preference) => {
-    if (
-      typeof preference.startEventName !== "string" ||
-      typeof preference.endEventName !== "string" ||
-      preference.startEventName.length === 0 ||
-      preference.endEventName.length === 0
-    ) {
-      return [];
-    }
-    const firstIndex = eventIndexes.get(preference.startEventName);
-    const secondIndex = eventIndexes.get(preference.endEventName);
-    if (
-      firstIndex === undefined ||
-      secondIndex === undefined ||
-      firstIndex === secondIndex
-    ) {
-      return [];
-    }
-    const startEventIndex = Math.min(firstIndex, secondIndex);
-    const endEventIndex = Math.max(firstIndex, secondIndex);
-    return [
-      {
-        preference: {
-          startEventName: events[startEventIndex].name,
-          endEventName: events[endEventIndex].name,
-        },
-        range: { startEventIndex, endEventIndex },
-      },
-    ];
-  }).sort(
-    (left, right) =>
-      left.range.startEventIndex - right.range.startEventIndex ||
-      right.range.endEventIndex - left.range.endEventIndex,
-  );
-
-  const accepted: TimelineFoldPreference[] = [];
-  const acceptedRanges: TimelineFoldRange[] = [];
-  const acceptedKeys = new Set<string>();
-  for (const candidate of candidates) {
-    const result = timelineFoldRangeBetween(
-      {
-        startEventIndex: candidate.range.startEventIndex,
-        endEventIndex: candidate.range.startEventIndex,
-      },
-      {
-        startEventIndex: candidate.range.endEventIndex,
-        endEventIndex: candidate.range.endEventIndex,
-      },
-      events.length,
-      protectedEventBoundaries,
-      acceptedRanges,
-    );
-    const key = timelineFoldPreferenceKey(candidate.preference);
-    if (!result.ok || acceptedKeys.has(key)) continue;
-    accepted.push(candidate.preference);
-    acceptedRanges.push(result.range);
-    acceptedKeys.add(key);
-  }
-  return accepted;
-}
-
-export function timelineFoldRangesFromPreferences(
-  preferences: readonly TimelineFoldPreference[],
-  events: readonly EvolveEvent[],
-  protectedEventBoundaries: readonly number[] = [],
-): TimelineFoldRange[] {
-  const eventIndexes = new Map(
-    events.map((event, index) => [event.name, index]),
-  );
-  return reconcileTimelineFoldPreferences(
-    preferences,
-    events,
-    protectedEventBoundaries,
-  ).flatMap((preference) => {
-    const startEventIndex = eventIndexes.get(preference.startEventName);
-    const endEventIndex = eventIndexes.get(preference.endEventName);
-    return startEventIndex === undefined || endEventIndex === undefined
-      ? []
-      : [{ startEventIndex, endEventIndex }];
-  });
-}
-
-function storedTimelineFolds(
-  value: unknown,
-  events: readonly EvolveEvent[],
-): TimelineFoldPreference[] {
-  if (!Array.isArray(value)) return [];
-  const parsed = value.flatMap((entry) =>
-    isRecord(entry) &&
-      typeof entry.startEventName === "string" &&
-      typeof entry.endEventName === "string"
-      ? [
-          {
-            startEventName: entry.startEventName,
-            endEventName: entry.endEventName,
-          },
-        ]
-      : [],
-  );
-  return reconcileTimelineFoldPreferences(parsed, events);
+export function reconcileExpandedEvents(current: readonly string[], events: readonly EvolveEvent[]): string[] {
+  const groups = new Set(events.filter(event => event.children.length > 0).map(event => event.component));
+  return [...new Set(current)].filter(id => groups.has(id));
 }
 
 function normalizedProjectPath(value: unknown): string | undefined {
@@ -410,8 +247,9 @@ export function createDefaultPresentationPreferences(
       reversedLayoutFocusIds: new Set(),
     },
     structureMetrics: { enabled: false, commits: 30 },
-    timelinePanels: {},
-    timelineFolds: [],
+    expandedEvents: [],
+    evolveInspectorHeight: DEFAULT_EVOLVE_INSPECTOR_HEIGHT,
+    evolveRailWidth: DEFAULT_EVOLVE_RAIL_WIDTH,
     files: {
       expandedPaths: new Set(),
       selectedPath: "",
@@ -424,7 +262,6 @@ export function createDefaultPresentationPreferences(
 export function reconcilePresentationPreferences(
   current: PresentationPreferences,
   graph: GraphData,
-  protectedTimelineEventBoundaries: readonly number[] = [],
 ): PresentationPreferences {
   return {
     ...current,
@@ -438,11 +275,9 @@ export function reconcilePresentationPreferences(
       sidebarWidth: normalizeFilesSidebarWidth(current.files.sidebarWidth),
     },
     structureMetrics: storedStructureMetrics(current.structureMetrics),
-    timelineFolds: reconcileTimelineFoldPreferences(
-      current.timelineFolds,
-      graph.events,
-      protectedTimelineEventBoundaries,
-    ),
+    expandedEvents: reconcileExpandedEvents(current.expandedEvents, graph.events),
+    evolveInspectorHeight: normalizeEvolveInspectorHeight(current.evolveInspectorHeight),
+    evolveRailWidth: normalizeEvolveRailWidth(current.evolveRailWidth),
   };
 }
 
@@ -472,8 +307,10 @@ export function loadPresentationPreferences(
       ),
       structure: storedStructureNavigation(value.structure, graph),
       structureMetrics: storedStructureMetrics(value.structureMetrics),
-      timelinePanels: storedTimelinePanelLayout(value.timelinePanels),
-      timelineFolds: storedTimelineFolds(value.timelineFolds, graph.events),
+      expandedEvents: reconcileExpandedEvents(stringArray(value.expandedEvents), graph.events),
+      evolveInspectorHeight: normalizeEvolveInspectorHeight(value.evolveInspectorHeight
+        ?? (isRecord(value.timelinePanels) ? value.timelinePanels.inspectorHeight : undefined)),
+      evolveRailWidth: normalizeEvolveRailWidth(value.evolveRailWidth),
       files: storedFilesNavigation(value.files),
     };
   } catch {
@@ -508,16 +345,9 @@ export function savePresentationPreferences(
       ].sort(),
     },
     structureMetrics: storedStructureMetrics(preferences.structureMetrics),
-    timelinePanels: {
-      inspectorHeight: normalizedTimelinePanelHeight(
-        preferences.timelinePanels.inspectorHeight,
-        MINIMUM_TIMELINE_INSPECTOR_HEIGHT,
-      ),
-    },
-    timelineFolds: preferences.timelineFolds.map((preference) => ({
-      startEventName: preference.startEventName,
-      endEventName: preference.endEventName,
-    })),
+    expandedEvents: [...new Set(preferences.expandedEvents)],
+    evolveInspectorHeight: normalizeEvolveInspectorHeight(preferences.evolveInspectorHeight),
+    evolveRailWidth: normalizeEvolveRailWidth(preferences.evolveRailWidth),
     files: {
       expandedPaths: [...preferences.files.expandedPaths].sort(),
       selectedPath: normalizedProjectPath(preferences.files.selectedPath) ?? "",

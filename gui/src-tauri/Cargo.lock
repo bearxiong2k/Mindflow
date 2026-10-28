@@ -1942,7 +1942,7 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "mindflow"
-version = "2026.10.25"
+version = "2026.10.27"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1958,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "mindflow-desktop"
-version = "2026.10.25"
+version = "2026.10.27"
 dependencies = [
  "mindflow",
  "rfd",

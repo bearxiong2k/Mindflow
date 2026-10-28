@@ -34,7 +34,7 @@ project files that are outside the selected Region. Visibility here does not
 register them. Keep changes to registration deliberate, and review their
 manifest effects.
 
-## Reader, Region, and Timeline
+## Reader, Region, and Evolve
 
 **Reader** opens document content in a separate native window. Follow ordinary
 Markdown links to continue reading. Images, Mermaid, and mathematical notation
@@ -48,12 +48,27 @@ and scroll when needed.
 Opening, Events, and Anchors. It is another view of the project rather than a
 separate store.
 
-**Timeline** becomes available from Structure when Events or Anchors exist.
-It shows the authored Evolve account and returns to the same structural context.
-Git history loads when Timeline opens, with visible loading and retry states.
-Dense Git marks are grouped for display. **Browse commits** provides pages and
-a commit-number field for selecting every exact commit. Events and Anchors
-remain available while history loads.
+**Evolve** becomes available from Structure when Opening files, Events, or
+Anchors exist and returns to the same structural context. Opening-file lifelines
+remain the main timeline. Fold a summary to compose its section; expand it to
+read finer Events alongside their detailed file transitions. Discussions are
+authored in ordinary Markdown files and the manifest, using an editor or agent.
+The GUI reads them without storing a second account.
+
+The Event navigator gives each hierarchy level its own progressively magnified
+row while keeping every row coordinated with the same history position. Scroll
+a row to navigate at its granularity; adjust its zoom independently. Where a
+level has no expanded entries, navigation uses its ancestor's scale. Labels,
+fold controls, and ancestry colors use the same presentation at every level.
+Deeper hierarchies scroll within the navigator so the lifelines retain space.
+
+Git history loads when Evolve opens, with visible loading and retry states.
+Selecting a Git version shows its message, author, committer, parents, and exact
+commit identity in the inspector. Clicking an Event shows that discussion's
+captured prose. Reading a summary does not move the timeline; its separate fold
+control expands or collapses the section. Events and Anchors remain available
+while Git evidence loads.
+
 A Region with empty Opening, Events, and Anchors is valid; a first project does
 not need invented history just to populate this view.
 
@@ -75,7 +90,9 @@ A missing or damaged cache is rebuilt through ordinary measurement.
 
 Refresh reloads project content. If a newly synchronized local build is ready,
 explicit Refresh can activate it and reconstruct workspace tabs. Passive
-window-focus checks do not activate another build. The version inspector helps
+window-focus checks do not activate another build. Returning to an unchanged
+window preserves its completed QC and Volume observations; unrelated file
+activity does not restart those measurements. The version inspector helps
 distinguish the running release, supported project format, and recorded project
 adoption; unknown provenance is shown as unknown.
 
@@ -89,7 +106,7 @@ this beta does not advertise supported SSH deployment.
 The CLI is the primary installation and first-use path. The optional GUI still
 has areas that need broader testing:
 
-- Opening Timeline still processes the complete first-parent Git history.
+- Opening the Evolve view still processes the complete first-parent Git history.
   Very large histories can increase that request's time and memory use.
 - The first QC/Volume request or a larger uncached history window still needs
   measurement. Caching reduces repeated work; it does not remove history limits.

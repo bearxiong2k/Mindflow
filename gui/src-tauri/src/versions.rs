@@ -117,7 +117,7 @@ mod tests {
     use super::*;
 
     fn record() -> String {
-        "version-info 1\nrelease 2026.10.20\napp-variant development\nsource-digest next\nbuilt-at 2026-10-20T10:00:00Z\napp-executable target/release/bundle/macos/Mind Dev.app/Contents/MacOS/mindflow-desktop\n".into()
+        "version-info 1\nrelease 2026.10.20\napp-variant development\nsource-digest next\nbuilt-at 2026-10-27T10:00:00Z\napp-executable target/release/bundle/macos/Mind Dev.app/Contents/MacOS/mindflow-desktop\n".into()
     }
 
     #[test]

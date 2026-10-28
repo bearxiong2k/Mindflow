@@ -107,7 +107,7 @@ mod tests {
             "2026.2.29",
             "2026.4.31",
             "2026.10.20.1",
-            "2026-10-20",
+            "2026-10-27",
         ] {
             assert!(!is_calendar_release(release), "{release}");
         }

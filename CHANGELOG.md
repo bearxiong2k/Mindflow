@@ -4,6 +4,37 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 private laboratory; this repository receives reviewed source releases.
 
+## [2026.10.27](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27) — Evolve prerelease
+
+- **Format changes to `2026-10-27`.** Events now select ordinary registered
+  Markdown discussions and nested summaries. Existing projects, including
+  `2026-10-20`, need reviewed manual adoption through `mindflow update-handoff`.
+  Installing this release does not convert their files or manifest.
+- Renames Timeline to **Evolve** and combines nested Event reading with
+  Opening-file lifelines. Folding a summary composes its whole section;
+  expanding it reveals finer discussions and detailed file transitions.
+  Current Opening remains independent of the recorded historical flow.
+- Adds a progressive Event navigator with independent zoom at each hierarchy
+  level and one coordinated history position. Empty child ranges inherit the
+  ancestor's navigation scale. Every level uses the same compact controls,
+  readable centered titles, and ancestry colors.
+- Integrates Git evidence into the inspector: selecting a commit shows its
+  message, author, committer, parents, and exact identity. Event prose appears
+  when an Event is selected, with snapshot-bound reads and retry handling.
+- Keeps Event-bar scrolling synchronized with the lifelines, bounds rendering
+  to visible geometry, and reuses geometry when the lane order is unchanged.
+  Focus, folding, navigation, and document reading retain their own state.
+- Preserves completed QC and Volume observations when returning to an unchanged
+  window, including when unrelated filesystem activity occurs.
+- Ships portable Event validation tests, updated public setup and format guides,
+  and the complete Structuralist package and recipe for this source release.
+
+Source and standalone Structuralist archives are accompanied by release notes
+and SHA-256 checksums. The optional macOS GUI is built locally from source;
+there is no prebuilt application asset. First measurements, large Git histories,
+and dense initial graph layouts can still take time. Two-host SSH deployment
+remains unqualified.
+
 ## [2026.10.25](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.25) — QC and volume caching prerelease
 
 - Reuses numeric documentation measurements across app and CLI sessions, so

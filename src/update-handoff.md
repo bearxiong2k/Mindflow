@@ -1,6 +1,6 @@
-# Mindflow format `2026-10-20` adoption handoff
+# Mindflow format `2026-10-27` adoption handoff
 
-Source release `2026.10.25` accepts project format `2026-10-20` only.
+Source release `2026.10.27` accepts project format `2026-10-27` only.
 Adoption is a reviewed manual project change; there is no migration command or
 backward compatibility mode.
 
@@ -17,8 +17,8 @@ mindflow version --json
 mindflow update-handoff
 ```
 
-The version output must identify release `2026.10.25`, project format
-`2026-10-20`, and bridge protocol `7`. Version reporting and `update-handoff`
+The version output must identify release `2026.10.27`, project format
+`2026-10-27`, and bridge protocol `10`. Version reporting and `update-handoff`
 work from an older project even when its manifest cannot load; do not pass
 `--root` to `update-handoff`. If PATH selects another checkout, invoke the
 intended installed executable by its exact path throughout this handoff.
@@ -32,23 +32,26 @@ Mindflow executable does not update a consuming project's files.
 
 ## Choose the adoption path
 
-After reviewing and validating adoption, record `adopted-release: "2026.10.25"`
+After reviewing and validating adoption, record `adopted-release: "2026.10.27"`
 at the manifest root. This records the release the project chose; it is separate
 from `format` and never updated just by launching a newer app or CLI. Existing
 current-format projects without this field need only this explicit provenance
 edit after review. Missing values and unsupported old projects show `Unknown`
 in the app (`null` in `mindflow version --json`); there is no old-version reader.
 
-For a project already using the integer-18 single-manifest contract, change
-the header to `format: "2026-10-20"` and record the adopted release above.
-Preserve registrations, relationships, and all SOE records exactly. A project
-already using `2026-10-20` needs no structural conversion.
-The date names a fixed schema revision; do not replace it with today's date
-when editing a project or rebuilding Mindflow.
+A project already using `2026-10-27` needs no structural conversion. The date
+names a fixed schema revision; do not replace it with today's date when editing
+a project or rebuilding Mindflow.
 
-For format 17 or another older format, first complete the manual reconstruction
-below. Changing its header alone is not adoption. Do not use `mindflow init`
-to update an existing project; it creates an empty manifest.
+For `2026-10-20`, integer 18, or another earlier format, complete the manual
+reconstruction below before changing the header. Existing filesystem-derived
+registrations and relationships can usually remain in place. The significant
+new change is Evolve: bind transition reasoning to ordinary discussion files
+and authored summary groups. Preserve each retained transition under its
+Event's optional `opening` record and keep the `historical-components` identities
+that its participants need. Current Opening remains independent. Changing the
+header alone is not adoption. Do not use `mindflow init` to update an existing
+project; it creates an empty manifest.
 
 ## Reconstruct older projects
 
@@ -60,7 +63,7 @@ there is no role vocabulary or override. Unregistered ancestors remain
 navigation context. Registering a folder does not register its descendants.
 
 Before adoption, preserve the current IDs, exact descriptions and prose,
-relationships, ordered Opening, Events, historical identities, Anchor commits,
+relationships, ordered Opening, Event reasoning, Anchor commits,
 and historical connections. Review every removed or changed reference.
 
 1. Bind each retained component to one existing root-relative directory or
@@ -76,8 +79,17 @@ and historical connections. Review every removed or changed reference.
    edge that does not meet that boundary. Cross-folder companion links can
    remain in owner prose; a directory-level relationship does not imply a
    relationship between its descendants.
-3. Preserve SOE references by stable ID. Event replay must converge on the exact
-   ordered Opening. Historical records retain `path` and optional description.
+3. Preserve Opening references by stable ID. Recast useful former Event
+   descriptions or discussions into ordinary Markdown files. Register each file
+   and reference its component in `evolve.events`; optional `children` name finer
+   Events under a summary file. Preserve former `predecessors` and `successors`
+   under that Event's `opening` record, keeping their exact ordered IDs. Keep
+   historical identity paths and descriptions in root `historical-components`;
+   these need no current file or registration. Remove the old Event `name` and
+   `description` fields after preserving their meaning in the file. A discussion
+   without file changes omits `opening`. Root order and ordered children define
+   the full flow, with a parent's own transition before its children; review
+   this order when regrouping. Current Opening remains independent.
    Anchors retain `component`, exact `commit`, ordered `connections`, and optional
    description; their current path is derived, so remove duplicate `file` fields.
 4. Keep only the current root keys: `format`, `adopted-release`, `components`,
@@ -94,7 +106,7 @@ and historical connections. Review every removed or changed reference.
    instructions or scripts that still treat them as authoritative. Mermaid
    is disposable generated output, never parsed input. Keep generated views
    outside managed registration.
-6. Set `format: "2026-10-20"` and validate the complete candidate. The current
+6. Set `format: "2026-10-27"` and validate the complete candidate. The current
    Structuralist recipe and the public `docs/project-format.md` guide provide
    exact examples (`specs/02-project-format.md` is the development companion).
    Adapt them to existing project
@@ -119,13 +131,14 @@ git diff
 Check every Event page when history exceeds 64 entries, and inspect each
 Anchor's exact commit and connections with `mindflow anchor show NAME`.
 Compare retained IDs and bindings, relationship meanings, ordered Opening,
-all Events, historical identities, Anchor commits/connections, and prose
+all Events, Anchor commits/connections, and prose
 against the preserved source. A passing structural check does not prove this
 semantic conservation. Resolve every changed or removed reference deliberately.
 
 If you built the optional desktop, open the adopted project in that synchronized
 Mindflow application. CLI-only adoption does not require a desktop build.
-Verify Structure, Opening cues, Timeline, and Reader access to exact content.
+Verify Structure, Opening cues, Evolve file lifelines with coupled Event
+expansion, and Reader access to exact content.
 Use the version button beside the project tabs to verify Dev/Stable identity,
 the serving core, project format, and adopted release separately. A different
 adopted release is provenance to review, not proof of incompatibility.

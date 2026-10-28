@@ -76,12 +76,12 @@ def run(*arguments):
 
 status = json.loads(run("status", "--json"))
 versions = json.loads(run("version", "--json"))
-assert versions["project"]["adopted_release"] == "2026.10.20"
+assert versions["project"]["adopted_release"] == "2026.10.27"
 assert status["schema"] == "mindflow-status/v6"
 region = status["region"]
-assert region["format"] == "2026-10-20" and region["schema"] == "mindflow-region-index/v5"
+assert region["format"] == "2026-10-27" and region["schema"] == "mindflow-region-index/v7"
 assert "roles" not in region and "project_map" not in region
-assert len(region["documents"]) == 10
+assert len(region["documents"]) == 11
 before = json.loads(run("map"))
 assert all(node["name"] == node["path"].rsplit("/", 1)[-1]
            for node in before["nodes"] if node["path"] != ".")

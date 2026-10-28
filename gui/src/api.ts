@@ -29,7 +29,7 @@ export function loadTimelineHistory(root: string, snapshot: string): Promise<Tim
     : invoke<TimelineHistoryResponse>("timeline_history", { root, snapshot });
   const request = pendingReport.then((report) => {
     if (report.root !== root || report.snapshot.id !== snapshot) {
-      throw new Error("Timeline history no longer matches this Region. Refresh the project and try again.");
+      throw new Error("Evolve history no longer matches this Region. Refresh the project and try again.");
     }
     return report;
   }).finally(() => { timelineRequests.delete(key); });
@@ -166,6 +166,10 @@ export function loadReaderImage(path: string): Promise<string> {
   return invoke<string>("reader_image_data_url", { path });
 }
 
+export function loadProjectImage(root: string, snapshot: string, path: string): Promise<string> {
+  return invoke<string>("reader_image_data_url", { root, snapshot, path });
+}
+
 export function inspectReaderTarget(target?: InspectionTarget): Promise<void> {
   return invoke<void>("inspect_reader_target", { target: target ?? null });
 }
@@ -270,6 +274,7 @@ export function listProjectDirectory(
 export function loadDocument(
   root: string,
   path: string,
+  snapshot: string,
 ): Promise<DocumentResponse> {
-  return invoke<DocumentResponse>("read_document", { root, path });
+  return invoke<DocumentResponse>("read_document", { root, path, snapshot });
 }

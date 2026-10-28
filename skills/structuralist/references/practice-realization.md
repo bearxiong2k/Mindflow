@@ -39,7 +39,7 @@ interpretation and judgment. The distinction is purpose-relative rather than
 code versus prose, good versus incomplete, or a stored lifecycle stage. One
 artifact may participate in both.
 
-Ordinary project documents carry exact open meaning. Format `2026-10-20` uses the
+Ordinary project documents carry exact open meaning. Format `2026-10-27` uses the
 filesystem for names, entry types, and containment, with one authored metadata
 carrier, `MINDFLOW.yaml`. It adds explicit registration, stable IDs and paths,
 optional short descriptions/indexes, sparse folder-local typed relationships,
@@ -52,7 +52,7 @@ SOE keeps three aspects distinct:
 | --- | --- |
 | Structure | What is maintained and organized now through explicit registration, stable identities, actual filesystem containment, useful annotations, and folder-local relationships |
 | Opening | The explicit current open condition through an ordered selection of Structure document component IDs |
-| Evolve | Meaningful transformation through ordered Events, historical identities, maintained Anchors, and selected exact Git evidence |
+| Evolve | Meaningful transformation through ordered Events, maintained Anchors, and selected exact Git evidence |
 
 The topology shell is small, typed, and version-aware; exact project-authored
 language supplies local meaning. Keep each aspect's participant shape,
@@ -73,9 +73,11 @@ document navigation. A file's existence alone does not make it managed.
 Opening is explicit rather than inferred from hierarchy, activity, prose, or an
 agent plan. Its selected documents retain their ordinary same-folder Structure
 relationships; Opening does not create a second graph. Leaving it does not
-imply completion, deletion, retirement, or formalization. Events retain selected
-semantic junctions over stable current or historical identities; replay must
-converge on the ordered current Opening. Anchors bind exact current document
+imply completion, deletion, retirement, or formalization. Events select ordinary Markdown discussions through stable component IDs.
+Summary Events name ordered children, with one parent each and no cycles.
+Optional `opening` metadata records real file transitions that the discussion
+explains. Current Opening is maintained independently; unresolved discussion
+needs no invented transition. Anchors bind exact current document
 components to fixed Git evidence.
 
 Reusable procedure and agent execution remain outside SOE. Keep useful local
@@ -176,7 +178,7 @@ procedures changes the Structuralist principle or becomes SOE state.
 | Distinction | Prose or document boundaries, roles, and vocabulary that make a useful difference visible |
 | Position and relation | Stable components, primary containment, owners, sparse relationships, external boundaries, and explicit authority or dependency language |
 | Perspective | Profiles, contracts, specifications, or syntheses when different questions or levels persist |
-| Temporality | Steering, evidence, discussions, deferred questions, scaffolds, stabilization, absorption, reopening, Opening, Events, historical identities, Anchors, and Git history |
+| Temporality | Steering, evidence, discussions, deferred questions, scaffolds, stabilization, absorption, reopening, Opening, Events, Anchors, and Git history |
 | Transformation | Coordinated expansion, formalization, absorption, reconciliation, trimming, and validation across prose, topology, SOE, and artifacts |
 
 This table offers translations, not required pairings. Any listed construct may
@@ -237,7 +239,7 @@ outcome, a total ordering, or an adoption target.
 ## Applying the realization
 
 Before authoring Mindflow metadata, inspect the selected executable's public
-help and version-linked documentation. Require format `2026-10-20` and the single-
+help and version-linked documentation. Require format `2026-10-27` and the single-
 manifest, filesystem-derived contract before claiming support for this
 realization. Resolve a mismatch through authorized toolchain work or a
 separately reviewed manual adoption. Do not create fallback maps, retain legacy
@@ -247,14 +249,14 @@ When a current manifest exists, use `mindflow status --json` and `mindflow check
 --json` for complete orientation after confirming that the Region is the
 relevant project system. For a bounded folder question, begin with the probe
 below. Inspect Opening, Evolve, historical selection, or Anchors only as needed.
-Authorized initialization creates an empty format `2026-10-20` manifest; it selects no
+Authorized initialization creates an empty format `2026-10-27` manifest; it selects no
 entries or intent. The later update handoff guides other projects' manual
 adoption without adding backward compatibility to the runtime.
 
 Let semantic changes lead registration. Update ordinary names, placement,
 prose, links, and minimal manifest records coherently. Keep IDs when an entry
 moves; update its path and affected registered descendants explicitly. Validate
-the resulting Region, affected folder scopes, Opening replay, and Git diff.
+the resulting Region, affected folder scopes, Event grouping, and Git diff.
 Generate Mermaid from that result rather than editing a saved diagram. Missing
 bindings, unsafe paths, or unresolved references are conditions to repair, not
 reasons to guess identity or drop content.
@@ -263,6 +265,34 @@ After an authorized expansion–absorption change, verify that intended
 downstream consequences are present, durable upstream insight and contradictory
 evidence remain visible, and removed provisional material carried no unique
 meaning. Do not infer health from word count, age, or document count.
+
+## Authoring Event discussions and summaries
+
+Use an existing ordinary discussion file when possible. Register it as a
+non-index Markdown component and add `{component: its_id}` to `evolve.events`.
+Keep the reasoning in the file, with links to consequence owners when settled.
+A summary is another such file whose Event record adds an ordered `children`
+list of Event IDs. Children can be summaries; one parent per Event and acyclic
+grouping keep expansion coherent. Root order follows the Event registry.
+
+Do not manufacture Opening changes or require a decision before preserving a
+useful development. When an Event records an actual file transition, add
+`opening: {predecessors: [old_id], successors: [new_id]}` to its record. Either
+side may be empty; both empty means omit `opening`. Use current non-index
+Markdown IDs or retain retired IDs with their last-known Markdown paths in root
+`historical-components`. These historical references never register files or
+select exact Git bytes. Review full root/child order: a parent's own transition
+occurs once before its children, each later predecessor must be open, and a
+successor must not already be open after removing predecessors. The first
+mention as a predecessor may carry a file in from before the recorded account.
+Do not rewrite history to force its end to match current Opening.
+
+Author grouping and prose through ordinary edits. Evolve folds a summary's
+file transitions and finer Events together; expanding restores both while the
+summary remains readable. The app saves only personal expansion. Revisions and regrouping are
+allowed, with earlier versions retained in Git. Validate the whole result with
+`mindflow check --json`, then inspect `mindflow evolve events --json` and read
+the affected exact files. A project needs no full recipe tree to use this.
 
 ## Checking navigable relationships
 

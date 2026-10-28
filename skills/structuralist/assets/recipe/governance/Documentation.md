@@ -22,7 +22,7 @@ managed region as an inventory of textual artifacts.
 | `canonical_docs/` | Exact current implementation-facing contracts | Philosophy, rationale ledger, or active plan |
 | Implementation, artifacts, and direct tests | Realized behavior, delivered output, and evidence | Project document-system membership merely because some artifacts use natural language |
 | `long_term_steering/` | Current developing intents that must remain understandable across turns | A second specification or task log |
-| `design_discussion/` | Focused reasoning behind accepted decisions | Current authority or unresolved-work tracker |
+| `evolve/` | Discussions, developing understanding, and authored summaries | Current authority or unresolved-work tracker |
 | `deferred_questions/` | Live protected choices with safe boundaries and revisit evidence | Backlog or optional idea list |
 | `temp_scaffold/` | Disposable coordination owned by one steering direction | Durable state or archive |
 | `trim_manual/` | Nonnormative procedures for recurring documentation drift | Current findings or repository policy |
@@ -51,7 +51,7 @@ and evidence can cross several levels.
 | Genuinely unresolved protected choice | Record its safe boundary and evidence-based revisit condition |
 | Temporary plan, experiment, or review | Keep one disposable scaffold under one steering owner |
 | Reusable response to a recurring drift pattern | Add a trim procedure after evidence of recurrence |
-| Region topology or SOE change | Update ordinary files and `MINDFLOW.yaml` registrations, links, relationships, Opening, Events, historical identities, and Anchors together; regenerate views as needed |
+| Region topology or SOE change | Update ordinary files and `MINDFLOW.yaml` registrations, links, relationships, Opening, Events, and Anchors together; regenerate views as needed |
 
 ## Ownership discipline
 
@@ -74,10 +74,12 @@ folder's actual name supplies its role in its path context. Required unmanaged
 ancestors remain context; selecting a folder does not register descendants.
 
 Mermaid is generated from that account, never an authored Structure carrier.
-Format `2026-10-20` has no legacy parser or compatibility template. Other projects adopt
+Format `2026-10-27` has no legacy parser or compatibility template. Other projects adopt
 it through a separately reviewed manual handoff. Opening remains an ordered
-selection of document IDs; Evolve preserves Events, replay, historical IDs,
-Anchors, and exact Git evidence. Consolidation creates no generic graph,
+selection of document IDs; Evolve preserves discussion Events, nested summaries,
+optional authored Opening transitions, Anchors, and exact Git evidence. Event
+participants retain retired identities explicitly when their files leave current
+registration; they do not enter the present selection by implication. Consolidation creates no generic graph,
 workflow, lifecycle, or formalization ledger.
 
 Reusable procedure and agent execution remain outside SOE. Keep recurring

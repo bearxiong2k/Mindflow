@@ -28,7 +28,7 @@ Mindflow.
 - Keep Mindflow Structure, Opening, and Evolve semantics distinct;
   actual files supply names and hierarchy, and `MINDFLOW.yaml` adds only
   registrations, useful annotations, relationships, and SOE records. Mermaid
-  is generated output. Use a format `2026-10-20` executable; no legacy compatibility
+  is generated output. Use a format `2026-10-27` executable; no legacy compatibility
   carrier is part of this recipe. Procedure remains ordinary guidance.
 - Treat profiles as durable design authority and canonical documents as the
   implementation-facing contract. Steering and temporary work never override

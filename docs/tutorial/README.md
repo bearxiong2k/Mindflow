@@ -54,8 +54,8 @@ bin/mindflow-app .
 
 Enter `docs` in Structure and open a guide in Reader. Compare the selected
 Structure with the literal Files rail. Opening cues stay within Structure;
-Timeline appears when authored Events or Anchors are present. Region inspection
-shows the same validated account available through the CLI.
+Evolve appears when Opening files, authored Events, or Anchors are present.
+Region inspection shows the same validated account available through the CLI.
 
 ## Make a small example of your own
 

@@ -5,7 +5,7 @@ meaning alongside ordinary files and Git. It selects useful files and folders,
 keeps their names and hierarchy grounded in the filesystem, and adds stable
 identities, sparse relationships, and an explicit account of what remains open.
 
-**[2026.10.25 source beta](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.25)** is a GitHub prerelease.
+**[2026.10.27 source beta](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27)** is a GitHub prerelease.
 It includes source and the optional Structuralist skill; no packaged macOS
 download is required.
 
@@ -15,8 +15,8 @@ download is required.
   project-authored relationships.
 - **Opening:** the ordered selection of documents carrying current open
   concerns.
-- **Evolve:** authored Events, maintained Anchors, and explicitly selected Git
-  evidence that make meaningful change revisitable.
+- **Evolve:** Markdown discussions and nested summaries, optional Opening-file
+  transitions, maintained Anchors, and explicitly selected Git evidence.
 
 The Rust Core validates this account. The CLI exposes it for precise inspection
 and agent work. An optional Tauri GUI provides spatial navigation and exact
@@ -29,7 +29,7 @@ system. It creates no background process or additional project state.
 With Git and the Rust build prerequisites in [Installation](docs/installation.md):
 
 ```sh
-git clone --branch v2026.10.25 https://github.com/bearxiong2k/Mindflow.git
+git clone --branch v2026.10.27 https://github.com/bearxiong2k/Mindflow.git
 cd Mindflow
 cargo install --locked --path . --bin mindflow
 mindflow --version
@@ -39,8 +39,8 @@ mindflow topology probe docs --depth 1 --max-nodes 128 --mermaid
 mindflow topology read docs/semantics.md
 ```
 
-You can also download the [source archive](https://github.com/bearxiong2k/Mindflow/archive/refs/tags/v2026.10.25.tar.gz) or choose
-source and skill assets from the [prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.25). From an extracted source
+You can also download the [source archive](https://github.com/bearxiong2k/Mindflow/archive/refs/tags/v2026.10.27.tar.gz) or choose
+source and skill assets from the [prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27). From an extracted source
 root, start at `cargo install` above. The conditional command creates the Git
 worktree needed to inspect its bundled Region; it leaves an existing `.git`
 entry untouched. Cargo installation itself does not require Git history.
@@ -72,9 +72,9 @@ and other agent environments.
 
 ## Release boundary
 
-This release uses project format **`2026-10-20`**. Older formats, including
-those used by the `0.1.0` preview, require reviewed manual adoption through
-`mindflow update-handoff`; there is no automatic migration. The historical
+This release uses project format **`2026-10-27`**. Older formats, including
+`2026-10-20` and those used by the `0.1.0` preview, require reviewed manual
+adoption through `mindflow update-handoff`; there is no automatic migration. The historical
 `integrate-mindflow` package is not the current methodology package.
 
 The GUI can be built locally on macOS. It is not a standalone browser app.

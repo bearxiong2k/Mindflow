@@ -9,11 +9,9 @@ import {
   normalizeInterfaceScale,
   presentationPreferencesStorageKey,
   reconcilePresentationPreferences,
-  reconcileTimelineFoldPreferences,
+  reconcileExpandedEvents,
   savePresentationPreferences,
   stepInterfaceScale,
-  timelineFoldPreferenceKey,
-  timelineFoldRangesFromPreferences,
 } from "./presentationPreferences.ts";
 
 class MemoryStorage {
@@ -28,6 +26,37 @@ class MemoryStorage {
   }
 }
 
+test("Evolve reading panel size is bounded and saved for only its project", () => {
+  const storage = new MemoryStorage();
+  const currentGraph = graph(["authority"], []);
+  const preferences = createDefaultPresentationPreferences(currentGraph);
+  preferences.evolveInspectorHeight = 310;
+  savePresentationPreferences("/one", preferences, storage);
+  assert.equal(loadPresentationPreferences("/one", currentGraph, storage).evolveInspectorHeight, 310);
+  assert.equal(loadPresentationPreferences("/two", currentGraph, storage).evolveInspectorHeight, 220);
+  storage.setItem(presentationPreferencesStorageKey("/old-panel"), JSON.stringify({
+    version: 8, timelinePanels: {inspectorHeight: 180},
+  }));
+  assert.equal(loadPresentationPreferences("/old-panel", currentGraph, storage).evolveInspectorHeight, 180);
+  preferences.evolveInspectorHeight = Infinity;
+  assert.equal(reconcilePresentationPreferences(preferences, currentGraph).evolveInspectorHeight, 220);
+});
+
+test("Evolve file rail width is saved per project and missing or corrupt values retain the default", () => {
+  const storage = new MemoryStorage();
+  const currentGraph = graph(["authority"], []);
+  const preferences = createDefaultPresentationPreferences(currentGraph);
+  preferences.evolveRailWidth = 260;
+  savePresentationPreferences("/one", preferences, storage);
+  assert.equal(loadPresentationPreferences("/one", currentGraph, storage).evolveRailWidth, 260);
+  assert.equal(loadPresentationPreferences("/two", currentGraph, storage).evolveRailWidth, 188);
+  storage.setItem(presentationPreferencesStorageKey("/older"), JSON.stringify({version:8, interfaceScale:1.2}));
+  const restored = loadPresentationPreferences("/older", currentGraph, storage);
+  assert.equal(restored.evolveRailWidth, 188);
+  assert.equal(restored.interfaceScale, 1.2);
+  assert.equal(reconcilePresentationPreferences({...preferences, evolveRailWidth:Infinity}, currentGraph).evolveRailWidth, 188);
+});
+
 function graph(folderNames, relationshipTypeNames) {
   const nodes=[{path:".",name:"Project",kind:"directory",component:{id:"root",index:false}}];
   const documents=[];
@@ -40,7 +69,7 @@ function graph(folderNames, relationshipTypeNames) {
     documents.push(document);
     nodes.push({path,name:"file.md",kind:"document",parent_path:parent,component:{id:document.component,index:false},document});
   });
-  return {format:"2026-10-20",structure:{nodes,relationships:[]},documents,historical_components:{},relationship_types:Object.fromEntries(relationshipTypeNames.map(name=>[name,{description:name,direction:"directional"}])),anchor_connection_types:{},events:[],anchors:{}};
+  return {format:"2026-10-27",structure:{nodes,relationships:[]},documents,historical_components:{},relationship_types:Object.fromEntries(relationshipTypeNames.map(name=>[name,{description:name,direction:"directional"}])),anchor_connection_types:{},events:[],anchors:{}};
 }
 
 test("workspace modes are not retained or serialized", () => {
@@ -86,9 +115,7 @@ function graphWithEvents(eventNames) {
   return {
     ...graph(["steering"], []),
     events: eventNames.map((name) => ({
-      name,
-      predecessors: [],
-      successors: [],
+      name, component: name, file: `${name}.md`, content: {sha256: "test", bytes: 0}, children: [],
     })),
   };
 }
@@ -110,9 +137,7 @@ test("presentation preferences round-trip independently for each project root", 
     "root",
     "role-0",
   ]);
-  preferences.timelinePanels = {
-    inspectorHeight: 128.76,
-  };
+  preferences.expandedEvents = [];
   preferences.files.expandedPaths = new Set(["canonical_docs", "profiles"]);
   preferences.files.selectedPath = "profiles/gui.md";
   preferences.files.scrollTop = 418.6;
@@ -138,9 +163,7 @@ test("presentation preferences round-trip independently for each project root", 
     "root",
   ]);
   assert.equal("readerEnabled" in restored, false);
-  assert.deepEqual(restored.timelinePanels, {
-    inspectorHeight: 128.8,
-  });
+  assert.deepEqual(restored.expandedEvents, []);
   assert.deepEqual([...restored.files.expandedPaths], [
     "canonical_docs",
     "profiles",
@@ -160,8 +183,7 @@ test("presentation preferences round-trip independently for each project root", 
   assert.deepEqual([...otherRoot.structure.depthsByFocusId], []);
   assert.deepEqual([...otherRoot.structure.reversedLayoutFocusIds], []);
   assert.equal("readerEnabled" in otherRoot, false);
-  assert.deepEqual(otherRoot.timelinePanels, {});
-  assert.deepEqual(otherRoot.timelineFolds, []);
+  assert.deepEqual(otherRoot.expandedEvents, []);
   assert.deepEqual([...otherRoot.files.expandedPaths], []);
   assert.equal(otherRoot.files.selectedPath, "");
   assert.equal(otherRoot.files.scrollTop, 0);
@@ -224,172 +246,21 @@ test("Structure navigation reconciles stale focus, depth, and direction without 
   assert.deepEqual([...pruned.structure.reversedLayoutFocusIds], ["root"]);
 });
 
-test("Timeline folds persist by event identity and reconcile a changed sequence", () => {
+test("Event expansion survives renames, reconciles removed groups, and stays project-local", () => {
   const storage = new MemoryStorage();
-  const initialGraph = graphWithEvents([
-    "one",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-  ]);
-  const preferences = createDefaultPresentationPreferences(initialGraph);
-  preferences.timelineFolds = [
-    { startEventName: "one", endEventName: "three" },
-    { startEventName: "five", endEventName: "six" },
-  ];
-
-  savePresentationPreferences("/project", preferences, storage);
-  const restored = loadPresentationPreferences(
-    "/project",
-    initialGraph,
-    storage,
-  );
-  assert.deepEqual(restored.timelineFolds, preferences.timelineFolds);
-  assert.deepEqual(
-    timelineFoldRangesFromPreferences(
-      restored.timelineFolds,
-      initialGraph.events,
-    ),
-    [
-      { startEventIndex: 0, endEventIndex: 2 },
-      { startEventIndex: 4, endEventIndex: 5 },
-    ],
-  );
-
-  const insertedGraph = graphWithEvents([
-    "zero",
-    "one",
-    "inserted",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-  ]);
-  const reopened = loadPresentationPreferences(
-    "/project",
-    insertedGraph,
-    storage,
-  );
-  assert.deepEqual(
-    timelineFoldRangesFromPreferences(
-      reopened.timelineFolds,
-      insertedGraph.events,
-    ),
-    [
-      { startEventIndex: 1, endEventIndex: 4 },
-      { startEventIndex: 6, endEventIndex: 7 },
-    ],
-  );
-
-  const anchorReconciled = reconcilePresentationPreferences(
-    reopened,
-    insertedGraph,
-    [3],
-  );
-  assert.deepEqual(anchorReconciled.timelineFolds, [
-    { startEventName: "five", endEventName: "six" },
-  ]);
-
-  const withoutEndpoint = reconcilePresentationPreferences(
-    restored,
-    graphWithEvents(["one", "two", "four", "five", "six"]),
-  );
-  assert.deepEqual(withoutEndpoint.timelineFolds, [
-    { startEventName: "five", endEventName: "six" },
-  ]);
-
-  const unfolded = {
-    ...restored,
-    timelineFolds: restored.timelineFolds.filter(
-      (preference) =>
-        timelineFoldPreferenceKey(preference) !==
-          timelineFoldPreferenceKey({
-            startEventName: "one",
-            endEventName: "three",
-          }),
-    ),
-  };
-  savePresentationPreferences("/project", unfolded, storage);
-  assert.deepEqual(
-    loadPresentationPreferences("/project", initialGraph, storage)
-      .timelineFolds,
-    [{ startEventName: "five", endEventName: "six" }],
-  );
-});
-
-test("Nested Timeline fold preferences survive restoration and removal of an outer layer", () => {
-  const storage = new MemoryStorage();
-  const currentGraph = graphWithEvents(["one", "two", "three", "four", "five", "six", "seven", "eight"]);
+  const currentGraph = graphWithEvents(["a", "b", "c"]);
+  currentGraph.events[0].children = ["b"];
+  currentGraph.events[1].children = ["c"];
   const preferences = createDefaultPresentationPreferences(currentGraph);
-  const outer = { startEventName: "one", endEventName: "eight" };
-  const children = [
-    { startEventName: "one", endEventName: "three" },
-    { startEventName: "two", endEventName: "three" },
-    { startEventName: "five", endEventName: "six" },
-  ];
-  // The outer range is created later; matching starts must not discard it.
-  preferences.timelineFolds = [...children, outer];
-  savePresentationPreferences("/project", preferences, storage);
-  const restored = loadPresentationPreferences("/project", currentGraph, storage);
-  assert.deepEqual(restored.timelineFolds, [outer, ...children]);
-  assert.deepEqual(timelineFoldRangesFromPreferences(restored.timelineFolds, currentGraph.events), [
-    { startEventIndex: 0, endEventIndex: 7 },
-    { startEventIndex: 0, endEventIndex: 2 },
-    { startEventIndex: 1, endEventIndex: 2 },
-    { startEventIndex: 4, endEventIndex: 5 },
-  ]);
-  assert.deepEqual(
-    reconcilePresentationPreferences(restored, currentGraph, [4]).timelineFolds,
-    children,
-    "an Anchor that invalidates an enclosing range must preserve its valid children",
-  );
-  const withoutOuterEndpoint = graphWithEvents(currentGraph.events.slice(0, -1).map((event) => event.name));
-  assert.deepEqual(reconcilePresentationPreferences(restored, withoutOuterEndpoint).timelineFolds, children);
-  const insertedGraph = graphWithEvents(["zero", ...currentGraph.events.map((event) => event.name)]);
-  const inserted = loadPresentationPreferences("/project", insertedGraph, storage);
-  assert.deepEqual(inserted.timelineFolds, [outer, ...children]);
-  assert.deepEqual(timelineFoldRangesFromPreferences(inserted.timelineFolds, insertedGraph.events), [
-    { startEventIndex: 1, endEventIndex: 8 },
-    { startEventIndex: 1, endEventIndex: 3 },
-    { startEventIndex: 2, endEventIndex: 3 },
-    { startEventIndex: 5, endEventIndex: 6 },
-  ]);
-  restored.timelineFolds = restored.timelineFolds.filter(
-    (preference) => timelineFoldPreferenceKey(preference) !== timelineFoldPreferenceKey(outer),
-  );
-  savePresentationPreferences("/project", restored, storage);
-  assert.deepEqual(loadPresentationPreferences("/project", currentGraph, storage).timelineFolds, children);
-});
-
-test("Timeline fold reconciliation rejects partial overlaps between nested siblings", () => {
-  const currentGraph = graphWithEvents(["one", "two", "three", "four", "five", "six"]);
-  const outer = { startEventName: "one", endEventName: "six" };
-  const child = { startEventName: "two", endEventName: "four" };
-  const crossing = { startEventName: "three", endEventName: "five" };
-  assert.deepEqual(reconcileTimelineFoldPreferences([
-    crossing, child, outer,
-    { startEventName: "four", endEventName: "two" },
-  ], currentGraph.events), [outer, child]);
-});
-
-test("Timeline fold reconciliation rejects corrupt, duplicate, and partially overlapping ranges", () => {
-  const currentGraph = graphWithEvents(["one", "two", "three", "four"]);
-  assert.deepEqual(
-    reconcileTimelineFoldPreferences(
-      [
-        { startEventName: "three", endEventName: "one" },
-        { startEventName: "one", endEventName: "three" },
-        { startEventName: "two", endEventName: "four" },
-        { startEventName: "missing", endEventName: "four" },
-        { startEventName: "four", endEventName: "four" },
-      ],
-      currentGraph.events,
-    ),
-    [{ startEventName: "one", endEventName: "three" }],
-  );
+  preferences.expandedEvents = ["a", "b", "a", "missing", "c"];
+  savePresentationPreferences("/one", preferences, storage);
+  assert.deepEqual(loadPresentationPreferences("/one", currentGraph, storage).expandedEvents, ["a", "b"]);
+  assert.deepEqual(loadPresentationPreferences("/two", currentGraph, storage).expandedEvents, []);
+  currentGraph.events[0].name = "Renamed summary.md";
+  assert.deepEqual(loadPresentationPreferences("/one", currentGraph, storage).expandedEvents, ["a", "b"]);
+  currentGraph.events[0].children = [];
+  assert.deepEqual(reconcilePresentationPreferences(preferences, currentGraph).expandedEvents, ["b"]);
+  assert.deepEqual(reconcileExpandedEvents(["b"], currentGraph.events.slice(1)), ["b"]);
 });
 
 test("unsupported preference versions start from current defaults", () => {
@@ -527,9 +398,7 @@ test("partially corrupt current and obsolete fields are validated without restor
   assert.equal("canvasTextScale" in restored, false);
   assert.equal("tensionLayout" in restored, false);
   assert.equal("readerEnabled" in restored, false);
-  assert.deepEqual(restored.timelinePanels, {
-    inspectorHeight: undefined,
-  });
+  assert.deepEqual(restored.expandedEvents, []);
 });
 
 test("interface scale steps predictably and clamps malformed or extreme values", () => {

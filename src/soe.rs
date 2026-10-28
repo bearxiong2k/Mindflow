@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AnchorConnection, EvolveEvent};
+use crate::model::{AnchorConnection, EventView};
 use crate::project::RegionIndex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,7 +16,7 @@ pub struct OpeningFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvolveFlow {
-    pub events: Vec<EvolveEvent>,
+    pub events: Vec<EventView>,
 }
 
 #[derive(Debug, Clone)]

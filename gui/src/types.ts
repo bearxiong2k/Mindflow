@@ -76,13 +76,20 @@ export interface AnchorTimelineSlice {
 export interface TimelineCommit {
   commit: string;
   event_boundary: number | null;
+  subject: string;
+  message: string;
+  author: { name: string; email: string; date: string };
+  committer: { name: string; email: string; date: string };
+  parents: string[];
 }
 
 export interface EvolveEvent {
+  component: string;
   name: string;
-  description?: string | null;
-  predecessors: string[];
-  successors: string[];
+  file: string;
+  content: { sha256: string; bytes: number };
+  children: string[];
+  opening?: { predecessors: string[]; successors: string[] };
 }
 
 export interface Diagnostic {
@@ -113,15 +120,15 @@ export interface RegionStatus {
   diagnostics: Diagnostic[];
 }
 
-export const CURRENT_PROJECT_FORMAT = "2026-10-20";
+export const CURRENT_PROJECT_FORMAT = "2026-10-27";
 
 export interface GraphData {
   format: string;
   structure: StructureProjection;
   documents: ManagedDocument[];
+  historical_components: Record<string, {path: string; description?: string}>;
   relationship_types: Record<string, RelationshipTypeDefinition>;
   anchor_connection_types: Record<string, AnchorConnectionTypeDefinition>;
-  historical_components: Record<string, {path: string; description?: string}>;
   events: EvolveEvent[];
   anchors: Record<string, AnchorDefinition>;
 }
@@ -271,21 +278,6 @@ export function documentRelationships(graph: GraphData): GraphRelationship[] {
       ? paths.get(relation.target)!
       : { path: paths.get(relation.target)! },
   }));
-}
-
-/** Exact path correspondence for a disposable historical overlay, never admission. */
-export function timelineIdentitiesForPaths(graph: GraphData, paths: readonly string[]): string[] {
-  const candidates = [
-    ...graph.documents.map(document => [document.component, document.path] as const),
-    ...Object.entries(graph.historical_components).map(([id, record]) => [id, record.path] as const),
-  ];
-  const identities = new Set<string>();
-  for (const path of paths) {
-    for (const [identity, binding] of candidates) {
-      if (binding === path) identities.add(identity);
-    }
-  }
-  return [...identities];
 }
 
 export interface TimelineHistoryResponse {

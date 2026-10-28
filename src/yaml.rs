@@ -587,9 +587,7 @@ mod tests {
             "  files: []\r\n",
             "evolve:\r\n",
             "  events:\r\n",
-            "    - name: establish-parent\r\n",
-            "      predecessors: []\r\n",
-            "      successors: [parent]\r\n",
+            "    - component: parent\r\n",
             "anchors: {}\r\n",
         );
         let files = append_nested_sequence_item(original, "opening", "files", "- branch").unwrap();
@@ -601,11 +599,11 @@ mod tests {
             &files,
             "evolve",
             "events",
-            "- name: open-branch\n  predecessors: [parent]\n  successors: [parent, branch]",
+            "- component: summary\n  children: [parent, branch]",
         )
         .unwrap();
         assert!(events.contains(
-            "    - name: open-branch\r\n      predecessors: [parent]\r\n      successors: [parent, branch]\r\n"
+            "    - component: summary\r\n      children: [parent, branch]\r\n"
         ));
         assert_eq!(
             serde_norway::from_str::<Value>(&events).unwrap()["opening"]["files"][0],

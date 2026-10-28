@@ -27,6 +27,11 @@ see [Contributing](.github/CONTRIBUTING.md) before changing shipped source.
    `mindflow --root /path/to/project check --json` after semantic edits.
    Start bounded orientation with `topology probe` and read the selected owners.
 
+Author Event discussions as ordinary registered Markdown files, with grouping
+and optional Opening transitions in the manifest. Follow
+[Project format](docs/project-format.md); current Opening remains independent of that recorded flow. The GUI reads these
+files. Do not invent Event records from every edit or commit.
+
 Do not copy the optional Structuralist recipe's document tree by default.
 Installation, skill invocation, and project adoption are separate actions.
 Report the exact executable, release, format, skill directory, project root,
