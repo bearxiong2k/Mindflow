@@ -4,6 +4,28 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 private laboratory; this repository receives reviewed source releases.
 
+## [2026.10.29](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.29) — Navigation and Structuralist prerelease
+
+- Gives Structure, Opening, and Evolve distinct labeled icon buttons. Structure
+  returns home to the root overview; Opening frames the current selection in
+  the graph; Evolve opens the history view.
+- Starts Files navigation alongside the graph transition, including returns to
+  a parent. Folding and reveal scrolling run together and finish sooner when
+  listings are available, with delayed responses kept independent of rendering.
+- Simplifies Structuralist guidance while preserving all five patterns. Event
+  discussions can carry unresolved questions and evidence; summaries connect
+  finer reasoning and link accepted consequences to their current owners.
+- Replaces the full recipe template with a compact worked example and optional
+  extensions. The supplied steering extension demonstrates changing current
+  Opening independently of Event history. Package checks validate both forms.
+- Keeps project format `2026-10-27`. Projects already using this format need no
+  structural conversion. Updating the app or skill does not automatically
+  change a project's recorded adoption.
+
+Includes source and standalone Structuralist archives with SHA-256 checksums.
+The optional macOS GUI is built locally; no prebuilt application is included.
+The existing [beta limitations](docs/gui.md#beta-limitations) still apply.
+
 ## [2026.10.27](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27) — Evolve prerelease
 
 - **Format changes to `2026-10-27`.** Events now select ordinary registered

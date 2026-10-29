@@ -70,7 +70,11 @@ or an agent's judgment is correct.
 Write the discussion in an ordinary Markdown file, register its stable component
 ID, and select that ID in `evolve.events`. A summary can list finer Event IDs as
 its `children`; an optional `opening` record adds explicit file transitions.
-See the complete example in [Project format](project-format.md). No Event is
+A discussion may remain unresolved. A summary explains the shared question,
+evidence, changed understanding, and what remains open; accepted commitments
+stay with their current owners. See [Project format](project-format.md) for the
+carrier and [Structuralist](structuralist.md#recipe-and-adoption) for the compact
+worked example. No Event is
 required merely because you edited a file or changed current Opening.
 
 ## Continuing work

@@ -7,7 +7,6 @@ import {
   type MutableRefObject,
   type MouseEvent,
   type PointerEvent,
-  type WheelEvent,
 } from "react";
 
 import {
@@ -428,7 +427,7 @@ export function useCanvasViewport({
   );
 
   const handleWheel = useCallback(
-    (event: WheelEvent<HTMLDivElement>) => {
+    (event: WheelEvent) => {
       if (
         event.target instanceof Element &&
         event.target.closest(WHEEL_OVERLAY_SELECTOR)
@@ -475,6 +474,15 @@ export function useCanvasViewport({
     },
     [geometry, localPoint, maximumZoom, minimumZoom, renderTransform, zoomAt],
   );
+
+  // Canvas pan and pinch replace browser scrolling, so cancellation must use
+  // a native non-passive listener rather than React's passive wheel listener.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.addEventListener("wheel", handleWheel, {passive: false});
+    return () => viewport.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
 
   const handlePointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
@@ -600,7 +608,6 @@ export function useCanvasViewport({
     viewportRef,
     contentRef,
     viewportHandlers: {
-      onWheel: handleWheel,
       onPointerDown: handlePointerDown,
       onPointerMove: handlePointerMove,
       onPointerUp: finishPointerPan,

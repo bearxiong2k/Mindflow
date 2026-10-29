@@ -190,22 +190,31 @@ export function DirectionSwapIcon({ size = 15, ...props }: IconProps) {
   );
 }
 
-export function StructureModeIcon({ size = 15, ...props }: IconProps) {
+export function StructureIcon({ size = 18, ...props }: IconProps) {
   return (
-    <svg viewBox="0 0 20 20" width={size} height={size} {...props} {...common}>
-      <path d="M10 4v5M5 15v-3h10v3" />
-      <circle cx="10" cy="3" r="1.7" />
-      <circle cx="5" cy="16.5" r="1.7" />
-      <circle cx="15" cy="16.5" r="1.7" />
+    <svg viewBox="0 0 20 20" width={size} height={size} aria-hidden="true" {...props} {...common}>
+      <rect x="7.5" y="2" width="5" height="5" rx="1.2" />
+      <path d="M10 7v3.5M4.5 13v-2.5h11V13" />
+      <rect x="2" y="13" width="5" height="5" rx="1.2" />
+      <rect x="13" y="13" width="5" height="5" rx="1.2" />
     </svg>
   );
 }
 
-export function TimelineModeIcon({ size = 15, ...props }: IconProps) {
+export function OpeningIcon({ size = 18, ...props }: IconProps) {
   return (
-    <svg viewBox="0 0 20 20" width={size} height={size} {...props} {...common}>
-      <path d="M2.5 10h15M7 10c1.5 0 1.5-4.5 3-4.5h4M11 10c1.2 0 1.2 4 2.5 4h3" />
-      <circle cx="7" cy="10" r="1.3" fill="currentColor" stroke="none" />
+    <svg viewBox="0 0 20 20" width={size} height={size} aria-hidden="true" {...props} {...common}>
+      <path d="M7 3H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2M13 3h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+      <circle cx="10" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+export function EvolveIcon({ size = 18, ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} aria-hidden="true" {...props} {...common}>
+      <circle cx="4" cy="14" r="2" />
+      <path d="M6 14h2c4 0 0-8 4-8h5m-3-3 3 3-3 3" />
     </svg>
   );
 }

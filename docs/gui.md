@@ -25,6 +25,17 @@ folder to inspect its contents; open a document to read it. Depth controls
 expand more hierarchy in place. Escape or Backspace returns from a nested
 layer when the canvas has focus.
 
+The SOE buttons provide direct navigation:
+
+- **Structure** acts as Home: it closes covering inspectors, returns to the
+  project root at depth 1, and fits the overview. Press it again to reset pan
+  and zoom at the root.
+- **Opening** navigates to the nearest shared folder, reveals the necessary
+  depth, and frames the current Opening documents with their surrounding
+  Structure. It is unavailable when the selection is empty.
+- **Evolve** opens the history view. Pressing it again keeps that view; its
+  close action returns to the previous Structure position.
+
 Opening documents and their containing branches receive distinct visual cues
 within Structure. Opening is not a separate canvas mode. Unregistered ancestor
 folders remain navigation context and do not acquire semantic membership.
@@ -32,7 +43,10 @@ folders remain navigation context and do not acquire semantic membership.
 **Files** is the persistent literal file navigator. It can expose ordinary
 project files that are outside the selected Region. Visibility here does not
 register them. Keep changes to registration deliberate, and review their
-manifest effects.
+manifest effects. During Structure navigation, Files begins following the
+destination as the graph transition starts. Its folding and reveal scroll run
+together and settle sooner when the listing is available; loading a folder
+does not wait for graph rendering.
 
 ## Reader, Region, and Evolve
 

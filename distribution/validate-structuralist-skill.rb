@@ -39,14 +39,18 @@ end
 abort "runtime package contains source-specific Flow-IR knowledge: #{source_named_files.join(", ")}" unless source_named_files.empty?
 
 broken = []
-text.scan(/\[[^\]]*\]\(([^)]+)\)/).flatten.each do |raw|
-  target = raw.split("#", 2).first
-  next if target.empty? || target.match?(%r{\A(?:https?://|mailto:)})
+([entry] + reference_root.glob("**/*.md")).each do |source|
+  source.read.scan(/\[[^\]]*\]\(([^)]+)\)/).flatten.each do |raw|
+    target = raw.split("#", 2).first
+    next if target.empty? || target.match?(%r{\A(?:https?://|mailto:)})
 
-  resolved = skill_root.join(target).cleanpath
-  broken << target unless resolved.exist?
+    resolved = source.parent.join(target).cleanpath
+    unless resolved.exist? && resolved.to_s.start_with?("#{skill_root}/")
+      broken << "#{source.relative_path_from(skill_root)}: #{target}"
+    end
+  end
 end
-abort "broken SKILL.md links: #{broken.join(", ")}" unless broken.empty?
+abort "broken or external package links: #{broken.join(", ")}" unless broken.empty?
 
 metadata_path = skill_root.join("agents/openai.yaml")
 metadata = YAML.safe_load(metadata_path.read, permitted_classes: [], aliases: false)
@@ -61,15 +65,6 @@ asset_root = skill_root.join("assets/recipe")
 tokens = asset_root.glob("**/*", File::FNM_DOTMATCH).select(&:file?).flat_map do |path|
   path.read.scan(/\{\{[A-Z_]+\}\}/)
 end.uniq.sort
-expected_tokens = %w[
-  {{COMPONENT_CONTRACTS}}
-  {{CURRENT_DEVELOPMENT_EDGE}}
-  {{PROJECT_BOUNDARY}}
-  {{PROJECT_NAME}}
-  {{PROJECT_PURPOSE}}
-  {{PROJECT_USERS}}
-  {{SYSTEM_SUMMARY}}
-].sort
-abort "unexpected recipe token set: #{tokens.join(", ")}" unless tokens == expected_tokens
+abort "unfinished worked-example tokens: #{tokens.join(", ")}" unless tokens.empty?
 
 puts "Structuralist skill package is structurally valid"

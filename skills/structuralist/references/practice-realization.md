@@ -1,324 +1,178 @@
 # Current Practice Realization
 
-## Status
+Use the project's own vocabulary. The responsibility glossary is advisory;
+Mindflow mechanics must agree with the installed version. The five patterns
+supply judgment; this reference supplies the relevant operations.
 
-This is the deliberately thin current realization of Mindflow's Structuralist
-methodology. It makes the capability practical; it does not define the
-principle, exhaust the patterns, or prescribe a document tree.
+## Mindflow operations
 
-Mindflow mechanics are exact according to the installed Mindflow version. The
-Structuralist glossary and suggested structure below are advisory. Interpret a
-project through its existing language first, and introduce this vocabulary only
-when it improves the local system.
+Before editing metadata, inspect the selected executable's public help and
+version-linked documentation. This realization targets format `2026-10-27`.
+Resolve a mismatch through authorized toolchain work or separately reviewed
+manual adoption as needed. Do not invent commands, translate old carriers
+automatically, or create a fallback map.
 
-## Project-relative scope
+The filesystem supplies names, kinds, containment, and folder role context.
+`MINDFLOW.yaml` selects entries explicitly by stable ID and exact path, with
+optional descriptions/index markers, folder-local typed relationships, and SOE.
+Selecting a directory does not select its descendants; necessary unregistered
+ancestors remain context. Descriptions add useful orientation rather than
+copying prose. Roles, names, kinds, and parents are not authored again.
+`PROJECT_MAP.mmd`, when exported, is disposable generated output.
 
-Locate the document system only after reaching a proportionate understanding
-of the project that contains it. Establish what the project develops, delivers,
-or operates and which natural-language carriers help the project understand,
-direct, constrain, or evolve that work.
-
-Artifact is a project-relative role, not a file type. An implementation,
-deliverable, template, or other output may use natural language and contain its
-own rich semantics while remaining an artifact of the producing project. A
-carrier belongs in the project document system only when it actually performs
-a project-level semantic function; dual-role carriers require deliberate
-recognition rather than inference from their medium.
-
-Do not use managed registration as an inventory of prominent or semantically rich
-Markdown. If no distinct project document system exists, preserve that finding
-and create project-level carriers only when the requested change authorizes it.
-Do not promote artifacts merely to avoid an empty topology.
-
-## Mindflow realization
-
-Mindflow provides topology-native infrastructure for one bounded unformalized
-Region. Formalized participation is sufficiently closed under explicit
-semantics for a purpose; unformalized participation still depends on situated
-interpretation and judgment. The distinction is purpose-relative rather than
-code versus prose, good versus incomplete, or a stored lifecycle stage. One
-artifact may participate in both.
-
-Ordinary project documents carry exact open meaning. Format `2026-10-27` uses the
-filesystem for names, entry types, and containment, with one authored metadata
-carrier, `MINDFLOW.yaml`. It adds explicit registration, stable IDs and paths,
-optional short descriptions/indexes, sparse folder-local typed relationships,
-and Opening/Evolve records. Mermaid is generated output; `PROJECT_MAP.mmd` is
-not an input or a second tree to maintain.
-
-SOE keeps three aspects distinct:
-
-| Aspect | What it expresses |
+| Aspect | Meaning |
 | --- | --- |
-| Structure | What is maintained and organized now through explicit registration, stable identities, actual filesystem containment, useful annotations, and folder-local relationships |
-| Opening | The explicit current open condition through an ordered selection of Structure document component IDs |
-| Evolve | Meaningful transformation through ordered Events, maintained Anchors, and selected exact Git evidence |
+| Structure | The selected present account and its actual hierarchy, exact language, and authored relationships |
+| Opening | An explicit ordered current selection of non-index Markdown component IDs |
+| Evolve | Authored Event discussions and summaries, optional Opening-file transitions, maintained Anchors, and selected exact Git evidence |
 
-The topology shell is small, typed, and version-aware; exact project-authored
-language supplies local meaning. Keep each aspect's participant shape,
-lifetime, validation, and wording distinct. Do not flatten them into one
-generic graph, workflow, task system, memory, lifecycle, or formalization
-ledger. The primary hierarchy gives progressive orientation but does not erase
-peer or cross-cutting relationships. Aggregate edges imply nothing about
-descendants. Roles describe responsibility rather than granting authority.
+Opening is independent of Event history. Discussion, activity, folder
+membership, and agent plans never select it implicitly. An Event file may also
+be in Opening when explicitly selected. A current Anchor document cannot.
+Leaving Opening means neither completion nor deletion. An Anchor is a current
+interpretive document tied to fixed Git evidence; exact historical selection
+is request-local. Registration, historical identity, and exact Git bytes are
+different things.
 
-A managed folder's actual name supplies its role in its full path context.
-Files retain their ordinary names and locations; root-level documents need no
-invented role. Registration selects each entry explicitly, and necessary
-unregistered ancestors remain navigation context. Descriptions add orientation
-without repeating names or detailed governing prose. There are no role aliases,
-defaults, overrides, or copied parents. Headings and links remain ordinary
-document navigation. A file's existence alone does not make it managed.
+For a bounded folder question, start with `mindflow topology probe DIRECTORY
+--depth 1 --max-nodes 128 --mermaid`. Use `topology read OWNER` for the exact
+owner and follow its ordinary links. Use `mindflow status --json` only for
+complete semantic orientation. Inspect other SOE views as the task needs them.
 
-Opening is explicit rather than inferred from hierarchy, activity, prose, or an
-agent plan. Its selected documents retain their ordinary same-folder Structure
-relationships; Opening does not create a second graph. Leaving it does not
-imply completion, deletion, retirement, or formalization. Events select ordinary Markdown discussions through stable component IDs.
-Summary Events name ordered children, with one parent each and no cycles.
-Optional `opening` metadata records real file transitions that the discussion
-explains. Current Opening is maintained independently; unresolved discussion
-needs no invented transition. Anchors bind exact current document
-components to fixed Git evidence.
+Authorized `mindflow init` creates an empty manifest, not a documentation
+system or intent. Edit ordinary project files directly. Keep stable IDs on
+moves, update exact bindings and affected links, and repair relationships and
+SOE references together. Run `mindflow check --json` after semantic changes and
+inspect the affected views and Git diff. Invalid bindings or references require
+repair; do not hide them by dropping content.
 
-Reusable procedure and agent execution remain outside SOE. Keep useful local
-maintenance practice in ordinary project guidance, or use an explicitly
-installed methodology when that boundary is justified. Do not invent a fourth
-aspect, hidden invocation state, or Action replacement.
+Formal artifacts retain their ordinary tools and validators. Mindflow validates
+declared structure, not the truth of the prose or the success of absorption.
+Formalized meaning is sufficiently explicit to execute or check for a purpose;
+unformalized meaning still needs situated judgment. These are kinds of
+participation, not file types, quality ranks, or permanent stages. One artifact
+may participate in both; repository visibility alone never selects the Region.
+Procedures, execution, lifecycle judgments, and formalization levels remain
+outside SOE. Unregistering a file and deleting it are separate actions.
 
-Ordinary files, explicit metadata, Git, and Mindflow's deterministic core
-preserve and validate declared structure. Humans or replaceable
-language-semantic backends interpret prose and perform authorized work. CLI and
-GUI manifestations remain views of the Region rather than authority, another
-file system, or a context store.
+## Responsibilities in ordinary files
 
-Use only the Mindflow distinctions that help express the project. Repository
-visibility is not Region membership, a role does not imply Opening membership,
-an external target's contents are not ingested as internal Region documents,
-and unregistration is distinct from ordinary-file deletion.
+These are functions that may share a file, not required directories or stages.
 
-## Evolution through expansion and absorption
-
-Mindflow supplies the minimal topology Region and SOE structure. Structuralist
-uses project meaning to recognize a finer, revisable formalization gradient above
-that infrastructure. The gradient concerns particular consequences, not whole
-files by default:
-
-```text
-open pressure or insight
-        -> durable interpretation
-        -> exact current commitment
-        -> formal realization and direct evidence
-```
-
-This is one common direction of realization, not a mandatory sequence or total
-hierarchy. Peer perspectives may remain plural; governance and agent guidance
-may cross levels; durable purpose and rationale may remain interpretive after
-their consequences are realized. Tests, implementation, use, and historical
-evidence travel in the other direction as pressure and may justify explicit
-reopening.
-
-For genuinely new or reforming meaning:
-
-- let it expand in the highest relevant owner that can preserve its uncertainty
-  without pretending the project already knows the answer;
-- distinguish durable insight, unresolved choice, evidence, exact commitment,
-  and realization only where those differences affect authority or change;
-- as consequences stabilize, absorb them into the more exact owners and
-  artifacts that must carry them;
-- reconcile lower evidence with upstream meaning through ordinary authorized
-  edits rather than treating realized behavior as silent authority; and
-- after conservation, release duplicate obligation, expired coordination, and
-  misplaced realization detail while retaining governing insight and live
-  uncertainty.
-
-These are composable judgments, not required phases. A task may enter at any
-point, may concern an exact correction that needs no high-level expansion, or
-may conclude that further formalization would reduce coherence.
-
-### Structural overload in the gradient
-
-Maintaining the expansion–absorption tension includes noticing when one owner
-has become structurally overloaded. This is a semantic condition: meanings in
-the owner require independent authority, change cadence, audience treatment,
-disclosure, or realization consequences. File length, section count, density,
-and mismatch with the suggested structure may prompt inspection but do not
-decide it.
-
-Use the patterns together. Distinction tests whether the meanings genuinely
-need separate treatment. Position and relation locate the affected owners and
-connections. Perspective preserves parallel reader treatments when needed.
-Temporality distinguishes live exploratory expansion from settled
-responsibility. Transformation chooses a proportionate response.
-
-Preserve or clarify one owner when its meanings still change coherently.
-Separate or reposition only the meanings that need independent change, restore
-their governing and realization relations, and trim duplicated obligation only
-after conservation. This judgment is part of Structuralist's evolutionary
-stewardship; it is not a sixth pattern, a recipe-compliance check, a Mindflow
-state, or a reason to audit the whole Region on every invocation.
-
-SOE can manifest parts of this movement without defining it. Structure may
-place open meaning, its owners, and deliberate coarse formal boundaries in one
-authored topology. Opening may carry a developing pressure explicitly. Evolve
-may retain an important semantic junction, Anchor, or exact evidence selection.
-None decides what has formalized, what should move, or whether absorption is
-complete. Do not add a universal formalization field, lifecycle, level number,
-or progress state to Mindflow carriers.
-
-Project-specific experience remains project-owned. Put a recurring drift or
-absorption response in ordinary local maintenance guidance only after evidence
-of recurrence; add reusable methodology guidance only when that boundary is
-justified; use a disposable scaffold for one active case. None of these local
-procedures changes the Structuralist principle or becomes SOE state.
-
-## Pattern-to-practice translation
-
-| Pattern | Possible realization in the current practice |
+| Responsibility | What it keeps intelligible |
 | --- | --- |
-| Distinction | Prose or document boundaries, roles, and vocabulary that make a useful difference visible |
-| Position and relation | Stable components, primary containment, owners, sparse relationships, external boundaries, and explicit authority or dependency language |
-| Perspective | Profiles, contracts, specifications, or syntheses when different questions or levels persist |
-| Temporality | Steering, evidence, discussions, deferred questions, scaffolds, stabilization, absorption, reopening, Opening, Events, Anchors, and Git history |
-| Transformation | Coordinated expansion, formalization, absorption, reconciliation, trimming, and validation across prose, topology, SOE, and artifacts |
+| Current owner | An accepted commitment, durable perspective, or exact contract |
+| Event discussion | A developing question, alternatives, evidence, changed understanding, or decision |
+| Summary Event | The meaning of a group of finer Events, including what remains unsettled |
+| Steering | Continuing intent, the current edge, and where its results should be absorbed |
+| Deferred question | A consequential protected choice, its safe boundary, and evidence that would justify revisiting it |
+| Scaffold | Disposable coordination under a steering owner, with reciprocal prose links and an explicit disposition |
+| Maintenance guidance | A reusable response to a demonstrated recurring pressure |
 
-This table offers translations, not required pairings. Any listed construct may
-serve another locally coherent pattern, and a pattern may need no explicit
-Mindflow object.
+An Event need not be settled. A summary need not declare closure. An unanswered
+question may remain in its discussion; give it a distinct deferred owner when
+it needs a protected boundary and revisit condition. Steering keeps the current
+direction readable without becoming a transcript or a second contract.
 
-## Suggested Structuralist glossary
-
-| Term | Current suggested meaning |
-| --- | --- |
-| Project context | The purpose, artifacts or operated system, implementation, participants, lifecycle, and authority within which the document system has meaning |
-| Document system | The project-relative natural-language whole through which the project understands, directs, constrains, and evolves itself, plus the practices by which that whole changes |
-| Artifact | An implementation, operated surface, or deliverable that realizes project meaning; textual form alone does not make it part of the project document system |
-| Formalized participation | Meaning sufficiently closed under explicit semantics to execute or check for a purpose, without implying truth, completeness, or a permanent layer |
-| Unformalized participation | Meaning that still depends on situated interpretation and judgment for a purpose, without implying carelessness or immaturity |
-| Region | The deliberately bounded topology and exact open meaning maintained as part of the project's unformalized layer |
-| Component | A stable project-authored identity in the Region topology, distinct from its label, binding, storage path, or traversal route |
-| Opening | The explicit current selection whose open condition must remain intelligible, without implying task or formalization state |
-| Owner | A location recognized as carrying particular project meaning or responsibility |
-| Governance | How the natural-language system assigns authority, routes change, admits structure, and maintains itself |
-| Profile | A durable perspective organized around a design question or reader treatment |
-| Contract | A current account whose meaning constrains implementation or behavior |
-| Steering | Meaning that carries an active developing direction rather than settled truth |
-| Evidence | A bounded observation, result, case, or source that pressures interpretation without becoming authority automatically |
-| Discussion | Differential reasoning retained around a consequential decision |
-| Deferred question | A protected choice whose resolution lacks sufficient authority or evidence |
-| Scaffold | Provisional coordination expected to disappear or transform |
-| Maintenance guidance | Reusable judgment for a recurring structural pressure |
-| Synthesis | A nonauthoritative reading path across existing owners |
-| Formalization gradient | A project-local partial order in which particular consequences move from open interpretation toward more exact owners and realizations while evidence can pressure meaning in return |
-| Absorption | Conserving a settled consequence in the owner or artifact that must carry it, then relieving its provisional source of duplicate obligation |
-| Structural overload | Meanings forced into one owner even though their authority or change consequences require independent treatment; not textual size or density |
-| Provisional residue | Detail, coordination, or obligation left in an open owner after its useful consequence has been absorbed elsewhere |
-
-These terms are a translation aid. A charter, specification, roadmap, decision
-record, notebook, issue, or other local form may realize the same patterns. Do
-not rename a coherent local system merely to adopt the glossary.
-
-## Suggested structure
-
-There is no mandatory core tree. When a project needs explicit structure, the
-current practice often distinguishes some combination of:
-
-- a way to understand how project knowledge is governed;
-- durable accounts or perspectives;
-- current implementation-facing meaning;
-- current developing direction; and
-- conditional evidence, reasoning, unresolved choices, temporary coordination,
-  maintenance guidance, or synthesis when their pressures persist.
-
-Several responsibilities may remain together. Separate or recombine them only
-when the selected structural patterns make that movement useful. The bundled
-[recipe](recipe.md) describes one coherent realization that may be consulted at
-any project phase, including one possible gradient from developing pressure
-through durable and exact owners toward formal artifacts. It is not the default
-outcome, a total ordering, or an adoption target.
-
-## Applying the realization
-
-Before authoring Mindflow metadata, inspect the selected executable's public
-help and version-linked documentation. Require format `2026-10-27` and the single-
-manifest, filesystem-derived contract before claiming support for this
-realization. Resolve a mismatch through authorized toolchain work or a
-separately reviewed manual adoption. Do not create fallback maps, retain legacy
-role records, invoke an old automatic migration, or invent a missing command.
-
-When a current manifest exists, use `mindflow status --json` and `mindflow check
---json` for complete orientation after confirming that the Region is the
-relevant project system. For a bounded folder question, begin with the probe
-below. Inspect Opening, Evolve, historical selection, or Anchors only as needed.
-Authorized initialization creates an empty format `2026-10-27` manifest; it selects no
-entries or intent. The later update handoff guides other projects' manual
-adoption without adding backward compatibility to the runtime.
-
-Let semantic changes lead registration. Update ordinary names, placement,
-prose, links, and minimal manifest records coherently. Keep IDs when an entry
-moves; update its path and affected registered descendants explicitly. Validate
-the resulting Region, affected folder scopes, Event grouping, and Git diff.
-Generate Mermaid from that result rather than editing a saved diagram. Missing
-bindings, unsafe paths, or unresolved references are conditions to repair, not
-reasons to guess identity or drop content.
-
-After an authorized expansion–absorption change, verify that intended
-downstream consequences are present, durable upstream insight and contradictory
-evidence remain visible, and removed provisional material carried no unique
-meaning. Do not infer health from word count, age, or document count.
+For a new standing owner, folder, or procedure, consider the distinct recurring
+responsibility, why existing owners are insufficient, carrying cost, and when
+to simplify it. This is not an admission ceremony for each registration,
+relationship, or Event. A useful one-time development can deserve an Event.
+Ordinary registrations and relationships need truthful scope and clear purpose,
+not evidence of recurrence.
 
 ## Authoring Event discussions and summaries
 
-Use an existing ordinary discussion file when possible. Register it as a
-non-index Markdown component and add `{component: its_id}` to `evolve.events`.
-Keep the reasoning in the file, with links to consequence owners when settled.
-A summary is another such file whose Event record adds an ordered `children`
-list of Event IDs. Children can be summaries; one parent per Event and acyclic
-grouping keep expansion coherent. Root order follows the Event registry.
+### Preserve developing reasoning
 
-Do not manufacture Opening changes or require a decision before preserving a
-useful development. When an Event records an actual file transition, add
-`opening: {predecessors: [old_id], successors: [new_id]}` to its record. Either
-side may be empty; both empty means omit `opening`. Use current non-index
-Markdown IDs or retain retired IDs with their last-known Markdown paths in root
-`historical-components`. These historical references never register files or
-select exact Git bytes. Review full root/child order: a parent's own transition
-occurs once before its children, each later predecessor must be open, and a
-successor must not already be open after removing predecessors. The first
-mention as a predecessor may carry a file in from before the recorded account.
-Do not rewrite history to force its end to match current Opening.
+Use an existing ordinary discussion file when possible. Write enough to explain
+the question or pressure, meaningful alternatives, evidence and uncertainty,
+and how understanding changed. These are useful prompts, not required headings.
+A brief unresolved discussion is valid. Do not capture every conversation or
+invent an outcome to make a record look complete.
 
-Author grouping and prose through ordinary edits. Evolve folds a summary's
-file transitions and finer Events together; expanding restores both while the
-summary remains readable. The app saves only personal expansion. Revisions and regrouping are
-allowed, with earlier versions retained in Git. Validate the whole result with
-`mindflow check --json`, then inspect `mindflow evolve events --json` and read
-the affected exact files. A project needs no full recipe tree to use this.
+Register the file as a non-index Markdown component and add
+`{component: its_id}` to `evolve.events`. Keep all reasoning in the file; titles
+come from filenames. No Event frontmatter, status, duplicated manifest prose,
+date, commit, or Opening transition is required. When consequences are accepted,
+update their current owners and link to them from the Event. Retain useful
+reasoning without making it a competing rule.
+
+### Summarize when a group has meaning
+
+Add a summary when a reader benefits from seeing a shared question, a changed
+interpretation, or the relationship between several developments before opening
+their details. File count, age, or a desire to hide clutter is not sufficient.
+
+Write a synthesis that explains the group's pressure, the meaningful
+alternatives and evidence, what changed or remains contested, and where any
+accepted consequences now live. Link to the finer discussions. Avoid merely
+listing their titles or repeating a final conclusion.
+
+Register the summary as another Event and add ordered `children` IDs to its
+record. Children remain separately registered Events and may be summaries
+themselves. Each Event has at most one parent; grouping is acyclic. Root order
+follows the Event registry, child order follows the list. Grouping is a reading
+structure, not causality, filesystem hierarchy, or exhaustive chronology.
+
+Evolve folds the group's Events and recorded file transitions together; the
+summary stays readable and expansion restores detail. The app keeps expansion
+as personal presentation. Folding does not remove redundant obligations, resolve
+contradictory claims, or absorb a decision into its owner.
+
+### Consolidate only when the reasoning survives
+
+Revising or regrouping Events is ordinary authoring; Git retains earlier bytes.
+Keeping children for expansion is often sufficient. If consolidation or removal
+is useful and authorized, first read the affected discussions and incoming
+references. Preserve unique alternatives, evidence, reasons for changed views,
+remaining uncertainty, and links to current consequences. Do not replace these
+with an unexplained verdict.
+
+Update prose links, the Event registry, parent `children`, registrations, and
+any owned transitions coherently. Disposition children explicitly when removing
+a summary. Review the diff for lost meaning; Git recovery does not make loss of
+necessary present understanding acceptable.
+
+### Record file transitions only when they happened
+
+An Event may add
+`opening: {predecessors: [old_id], successors: [new_id]}` when its discussion
+records an actual change in open files. Either side may be empty; omit
+`opening` when both are empty. A discussion or summary alone needs none.
+
+Use current non-index Markdown IDs, or retain retired IDs and last-known
+Markdown paths in root `historical-components`. These records neither register
+a missing file nor select exact Git bytes. Do not give an ID both current and
+historical registrations.
+
+Review the full root/child flow: a parent's own transition applies once before
+its children; a first predecessor may carry a file in from before the recorded
+account; later predecessors must be open; a successor must not already be open
+after predecessor removal. A summary composes its subtree's effect rather than
+repeating child transitions. Never fabricate history to make the recorded end
+equal current `opening.files`.
+
+After authoring, run `mindflow check --json`, inspect
+`mindflow evolve events --json` and affected Opening views, and read the exact
+files. Structural validation alone cannot judge the quality of a summary.
 
 ## Checking navigable relationships
 
-After constructing or reforming Structure, review how a reader reaches its
-important meaning, as well as whether the carrier is valid:
+After constructing or reforming Structure:
 
-1. Inspect the root overview with `mindflow topology probe --depth 1
-   --max-nodes 128 --mermaid`. Read the authored relationships between the
-   visible folder scopes; descendant links are not lifted into this view.
-2. Follow each affected folder with `mindflow topology probe DIRECTORY
-   --depth 1 --max-nodes 128 --mermaid`. Inspect both its child relationships
-   and the incidences on the selected scope. Descend further where the
-   consequential owners live; a shallow or budget-limited sample cannot stand
-   for that inspection. Use `mindflow topology read OWNER` and ordinary exact
-   links to verify what each relationship means.
-3. Trace the task's consequential authority, evidence, and realization
-   connections through these scopes. Where a connection belongs between peer
-   aggregates, author it explicitly only if their own meaning supports it.
-   Preserve narrower cross-folder claims in exact prose when a coarse edge
-   would overstate the relationship. A folder association never entails an
-   edge between every pair of descendants.
-4. Report the reviewed scopes and any consequential connection deliberately
-   left in prose or unresolved. An independent or containment-only scope may
-   be correct; explain that choice when it matters to the requested work.
+1. Inspect the root with `mindflow topology probe --depth 1 --max-nodes 128
+   --mermaid`, then the affected folders with the same bounded command and a
+   directory address. Read hierarchy first and incident relationships next.
+   Descend to relevant owners; a shallow or budget-limited sample is partial.
+2. Follow consequential authority, evidence, and realization connections using
+   `mindflow topology read OWNER` and exact prose links.
+3. Author a relationship between peers in one folder only when their own
+   meaning supports it. A coarse folder edge implies nothing about descendants.
+   Keep exact cross-folder claims in prose when aggregation would overstate them.
+4. Report consequential connections deliberately left in prose or unresolved
+   when relevant to the task.
 
-A complete hierarchy, many whole-map edges, successful address resolution,
-and `mindflow check --json` do not establish that readers can follow the
-relevant connections. This review has no edge quota, connectedness target,
-preferred layout, automatic lifting, or stored health result.
+A valid hierarchy or successful lookup does not establish useful navigation.
+There is no edge quota, connectedness target, automatic lifting, preferred
+layout, or stored health result. A deliberate containment-only scope is valid.

@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 
 import { normalizeCanvasTextScale } from "../canvasTextScale";
 import {
+  canvasPointFromClientRect,
   canvasViewportWindow,
   type CanvasPoint,
   type CanvasSize,
@@ -132,6 +133,7 @@ interface ProjectMapLayerEntry {
 }
 
 interface ProjectMapLayerAnimation {
+  destinationFocusId: string;
   geometry?: ProjectMapLayerGeometry;
   navigationRevision?: number;
   origin: ProjectMapLayerOrigin;
@@ -582,6 +584,7 @@ export function ProjectMapView({
   const initializedProjectionKeyRef = useRef<string | undefined>(undefined);
   const previousSelectedPathRef = useRef(selectedPath);
   const receivedNavigationRequestRef = useRef<ProjectMapNavigationRequest | undefined>(undefined);
+  const pendingNavigationFitRef = useRef<ProjectMapNavigationRequest | undefined>(undefined);
   const minimapIndicatorRef = useRef<HTMLButtonElement | null>(null);
   const minimapSnapshotRef = useRef<CanvasViewportSnapshot | undefined>(
     undefined,
@@ -590,14 +593,17 @@ export function ProjectMapView({
     layerNavigationGate.cancel();
   }, [layerNavigationGate]);
 
-  useEffect(() => {
+  // Files follows the destination from the first transition frame, even while
+  // the outgoing canvas remains frozen until the return animation completes.
+  const navigationFocusId = layerAnimation?.destinationFocusId ?? focusId;
+  useLayoutEffect(() => {
     onStructureNavigationChange({
-      focusId,
+      focusId: navigationFocusId,
       depthsByFocusId: new Map(viewingDepthsByFocusId),
       reversedLayoutFocusIds: new Set(reversedLayoutFocusIds),
     });
   }, [
-    focusId,
+    navigationFocusId,
     onStructureNavigationChange,
     reversedLayoutFocusIds,
     viewingDepthsByFocusId,
@@ -734,6 +740,7 @@ export function ProjectMapView({
   );
   const changeTextScale = useCallback(
     (nextTextScale: number) => {
+      pendingNavigationFitRef.current = undefined;
       cancelPendingLayerNavigation();
       setTextScale(normalizeCanvasTextScale(nextTextScale));
     },
@@ -786,6 +793,7 @@ export function ProjectMapView({
     zoomIn,
     zoomOut,
     fit,
+    fitBounds,
     restore,
     centerAtContentRatio,
     getViewportSnapshot,
@@ -809,6 +817,7 @@ export function ProjectMapView({
   const handleRenderStatusChange = useCallback((status: "loading" | "rendered" | "error") => {
     setRenderStatus(status);
     if (status !== "error") return;
+    pendingNavigationFitRef.current = undefined;
     cancelPendingLayerNavigation();
     clearLayerTransitionTimer();
     // A failed destination must become visible and release navigation controls.
@@ -932,6 +941,7 @@ export function ProjectMapView({
   useEffect(() => {
     if (
       !currentRenderedGraph ||
+      pendingNavigationFitRef.current ||
       initializedProjectionKeyRef.current === projectionKey
     ) {
       return;
@@ -1062,6 +1072,7 @@ export function ProjectMapView({
     (nextDepth: number) => {
       const boundedDepth = Math.max(1, Math.min(maximumDepth, nextDepth));
       if (boundedDepth === visibleDepth) return;
+      pendingNavigationFitRef.current = undefined;
       cancelPendingLayerNavigation();
       clearLayerTransitionTimer();
       pendingViewportRestoreRef.current = undefined;
@@ -1087,6 +1098,7 @@ export function ProjectMapView({
 
   const toggleLayoutDirection = useCallback(() => {
     if (layerAnimation) return;
+    pendingNavigationFitRef.current = undefined;
     cancelPendingLayerNavigation();
     pendingViewportRestoreRef.current = undefined;
     skipAutomaticFitFocusIdRef.current = undefined;
@@ -1101,6 +1113,7 @@ export function ProjectMapView({
   useEffect(() => {
     cancelPendingLayerNavigation();
     clearLayerTransitionTimer();
+    pendingNavigationFitRef.current = undefined;
     pendingViewportRestoreRef.current = undefined;
     skipAutomaticFitFocusIdRef.current = undefined;
     setLayerAnimation(undefined);
@@ -1163,6 +1176,7 @@ export function ProjectMapView({
 
   const selectComponent = useCallback(
     (id: string) => {
+      pendingNavigationFitRef.current = undefined;
       cancelPendingLayerNavigation();
       setSelectedId(id);
     },
@@ -1185,11 +1199,62 @@ export function ProjectMapView({
     setLayerEntries(new Map());
     setFocusId(component.id);
     setSelectedId(component.id);
-  }, [navigationRequest, componentById, cancelPendingLayerNavigation, clearLayerTransitionTimer]);
+    if (navigationRequest.depth !== undefined) {
+      setViewingDepthsByFocusId(current => projectMapViewingDepthsWith(current,
+        component.id, navigationRequest.depth!, projectMapMaximumDepth(component.id, childrenByParent)));
+    }
+    if (automaticFitFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(automaticFitFrameRef.current);
+      automaticFitFrameRef.current = undefined;
+    }
+    pendingNavigationFitRef.current = navigationRequest.fitGraph || navigationRequest.fitComponentIds?.length
+      ? navigationRequest : undefined;
+  }, [navigationRequest, componentById, childrenByParent, cancelPendingLayerNavigation, clearLayerTransitionTimer]);
+
+  // Wait for the requested hierarchy and its exact SVG before fitting. This
+  // also handles repeated Home or Opening clicks without a projection change.
+  useEffect(() => {
+    const request = pendingNavigationFitRef.current;
+    const content = contentRef.current;
+    if (!request || !content || !currentRenderedGraph ||
+      request.focusId !== projection.focus.id ||
+      (request.depth !== undefined && request.depth !== projection.depth)) return;
+    if (request.fitGraph) {
+      pendingNavigationFitRef.current = undefined;
+      initializedProjectionKeyRef.current = projectionKey;
+      fit();
+      viewportRef.current?.focus({preventScroll: true});
+      return;
+    }
+    if (!request.fitComponentIds) return;
+    const targets = new Set(request.fitComponentIds);
+    const found = new Set<string>();
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const node of content.querySelectorAll<SVGElement>("g.node[data-project-component-id]")) {
+      const id = node.getAttribute("data-project-component-id")!;
+      if (!targets.has(id)) continue;
+      const rect = node.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      found.add(id);
+      left = Math.min(left, rect.left); top = Math.min(top, rect.top);
+      right = Math.max(right, rect.right); bottom = Math.max(bottom, rect.bottom);
+    }
+    if (found.size !== targets.size) return;
+    const bounds = content.getBoundingClientRect();
+    const viewBox = {x: 0, y: 0, ...contentSize};
+    const start = canvasPointFromClientRect({x: left, y: top}, bounds, viewBox);
+    const end = canvasPointFromClientRect({x: right, y: bottom}, bounds, viewBox);
+    if (!start || !end) return;
+    pendingNavigationFitRef.current = undefined;
+    initializedProjectionKeyRef.current = projectionKey;
+    fitBounds({x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y}, 48);
+    viewportRef.current?.focus({preventScroll: true});
+  }, [navigationRequest, currentRenderedGraph, projection.focus.id, projection.depth, projectionKey,
+    contentRef, contentSize, fit, fitBounds, viewportRef]);
 
   useEffect(() => {
     onHoverComponent?.(undefined);
-  }, [focusId, onHoverComponent]);
+  }, [navigationFocusId, onHoverComponent]);
 
   const visibleHoverId = useMemo(() => {
     const visible = new Set([
@@ -1213,6 +1278,7 @@ export function ProjectMapView({
       origin?: ProjectMapActivationModifiers["origin"],
       expandedRegionDepth?: number,
     ) => {
+      pendingNavigationFitRef.current = undefined;
       const component = componentById.get(id);
       if (
         layerAnimation ||
@@ -1270,6 +1336,7 @@ export function ProjectMapView({
         setFocusId(id);
         setSelectedId(id);
         setLayerAnimation({
+          destinationFocusId: id,
           phase: "preparing",
           navigationRevision,
           origin: layerOrigin,
@@ -1397,6 +1464,7 @@ export function ProjectMapView({
     : bannerBaseLayoutDirection;
   const returnToParent = useCallback(() => {
     if (!parentFocus || layerAnimation) return;
+    pendingNavigationFitRef.current = undefined;
     cancelPendingLayerNavigation();
     const returningFocusId = projection.focus.id;
     const finishReturn = () => {
@@ -1430,6 +1498,7 @@ export function ProjectMapView({
     }
     clearLayerTransitionTimer();
     setLayerAnimation({
+      destinationFocusId: parentFocus.id,
       geometry: currentLayerEntry?.geometry,
       phase: "closing",
       origin: currentLayerEntry?.origin ?? DEFAULT_PROJECT_MAP_LAYER_ORIGIN,

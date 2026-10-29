@@ -96,6 +96,33 @@ export function projectMapFor(graph: GraphData): ProjectMap {
   return map;
 }
 
+/** An explicit navigation action: reveal Opening in its ordinary hierarchy. */
+export function projectMapOpeningFocus(map: ProjectMap, opening: Opening) {
+  if (!opening.files.length) return undefined;
+  const byId = new Map(map.components.map(component => [component.id, component]));
+  const ancestors: string[][] = [];
+  for (const file of opening.files) {
+    const component = byId.get(file.component);
+    if (component?.kind !== "document") return undefined;
+    const chain: string[] = [];
+    const visited = new Set<string>();
+    let parent = component.parent;
+    while (parent && !visited.has(parent)) {
+      visited.add(parent);
+      chain.push(parent);
+      parent = byId.get(parent)?.parent;
+    }
+    if (chain.at(-1) !== map.root) return undefined;
+    ancestors.push(chain);
+  }
+  const focusId = ancestors[0].find(id => ancestors.every(chain => chain.includes(id)))!;
+  return {
+    focusId,
+    depth: Math.max(...ancestors.map(chain => chain.indexOf(focusId) + 1)),
+    fitComponentIds: opening.files.map(file => file.component),
+  };
+}
+
 export function projectMapMaximumDepth(
   focusId: string,
   childrenByParent: ReadonlyMap<string, readonly ProjectComponent[]>,

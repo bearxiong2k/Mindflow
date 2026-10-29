@@ -1,135 +1,111 @@
 # Structuralist Recipe
 
-## Role
+## One comparison, at any project phase
 
-Use this recipe when one coherent realization of Structuralist's current
-practice would help a project understand or change its document system. It is
-lifecycle-neutral: a new, established, migrating, drifting, or refactoring
-project may consult it without being treated as if it were starting over.
+This recipe illustrates developing reasoning, accepted meaning, and current
+focus with few files. It is a comparison, not an adoption unit, document tree
+requirement, or project lifecycle. Use existing owners and names when they work.
+Consulting the recipe authorizes no mutation; inspect assets only when adapting
+or materializing them is part of the request.
 
-The recipe is a reference, not a target architecture, adoption unit, maturity
-stage, or required sequence. Comparing a project with it authorizes no change.
-A project may reuse none, some, or all of its responsibilities and may realize
-them through different vocabulary, files, or relations.
+## Compact example
 
-`assets/recipe/` is an optional materialization of the recipe. Do not inspect or
-copy those files merely because the reference is useful.
+Fieldbook is a fictional project for reading field notes. Its example begins
+during a browsing-design discussion, without claiming to reconstruct the
+project's beginning.
 
-## Candidate responsibilities
+```text
+project.md                         current purpose and accepted behavior
+evolve/
+  browsing-question.md             an initially unresolved discussion
+  browsing-evidence.md             a later observation and remaining uncertainty
+  browsing-summary.md              synthesis linking the finer Events and owner
+MINDFLOW.yaml                      selected files, current Opening, Event grouping
+AGENTS.md                          concise reading and editing guidance
+```
 
-| Recipe element | Possible responsibility |
-| --- | --- |
-| `AGENTS.md` | Concise local reading, editing, review, and validation guidance |
-| `governance/Documentation.md` | Documentation-system governance |
-| Ordinary folders and files | Names, containment, role context, exact prose, and ordinary navigation |
-| `MINDFLOW.yaml` | Explicit registrations, stable IDs and paths, optional descriptions/indexes, relationships, and SOE records |
-| Generated Mermaid | Disposable visualization of the selected filesystem structure and relationships |
-| `profiles/` | Durable perspectives |
-| `canonical_docs/` | Current implementation-facing meaning |
-| `long_term_steering/` | Developing direction |
-| `deferred_questions/` | Protected unresolved choices |
-| `evolve/` | Event discussions and authored summaries |
-| `trim_manual/` | Reusable maintenance guidance |
+In the question, recent visits and place grouping are plausible alternatives.
+The later evidence changes the choice without settling how to compare visits.
+The summary explains why recent visits became the default and why place
+grouping remains useful. Accepted browsing behavior lives in `project.md`;
+the remaining comparison question stays in the evidence discussion. No
+separate deferred-question register is needed yet.
 
-These are possible responsibilities, not evidence that the target needs every
-element or that one element must own only one responsibility.
-Choose understandable folder and file names for those responsibilities. A
-managed folder's actual name supplies its role in its path context. This
-recipe's vocabulary is optional; it creates no role glossary, aliases, defaults,
-or overrides. A short description adds scope or contribution when the name
-alone is insufficient.
+The manifest registers all four documents. Evolve selects the three discussions,
+with the summary naming the other two as ordered children. Current Opening
+explicitly selects the evidence discussion because it carries the remaining
+question. None of these Events claims an Opening-file transition.
 
-## Possible responsibility gradient
+This demonstrates three independent choices: what to maintain, what to keep
+open now, and how to read the reasoning. One useful discussion would also be a
+valid starting point; the three-file example exists to show summarization, not
+to impose a minimum.
 
-The recipe can make one expansion–absorption direction legible without turning
-its directories into levels:
+Use the [Event guidance](practice-realization.md#authoring-event-discussions-and-summaries)
+for authoring, grouping, optional transitions, and conservation during removal.
+Summarizing supplies a readable synthesis; folding preserves access to the
+children. It does not by itself eliminate duplicate authority.
 
-| Evolutionary tendency | Possible responsibility |
-| --- | --- |
-| Open developing pressure | `long_term_steering/`, `deferred_questions/`, or a project-local temporary scaffold |
-| Durable interpretation | `profiles/` |
-| Exact current commitment | `canonical_docs/` |
-| Formal realization and direct evidence | Project implementation, artifacts, and tests outside the recipe |
-| Retained decision evidence | `evolve/`, with links to current owners when consequences settle |
-| Cross-gradient governance and working invariants | `governance/Documentation.md` and concise `AGENTS.md` guidance |
-| Reusable project-specific maintenance experience | `trim_manual/` |
-| Minimal Structure and SOE metadata | `MINDFLOW.yaml` over the ordinary filesystem; generated views |
+## Optional extensions
 
-This is a partial order of responsibilities, not a universal pipeline. A
-consequence may move from open pressure to a durable perspective, exact
-contract, and artifact while its originating purpose remains authoritative.
-Evidence can pressure a higher interpretation without silently replacing it.
-Some responsibilities remain peer, cross-cutting, unresolved, or unnecessary.
+Introduce a responsibility when the project needs it, and separate files only
+when their authority or change needs differ. These extensions can be combined,
+renamed, or left within an existing owner.
 
-## Consulting the recipe
+| Pressure | Possible extension | What changes |
+| --- | --- | --- |
+| A continuing direction outlives individual discussions | `long_term_steering/` | Keep intent, present edge, and absorption destination; link Event reasoning |
+| A durable perspective needs independent review | `profiles/` | Move the relevant purpose or design commitment from its current owner and leave a link |
+| Exact implementation behavior needs its own change surface | `canonical_docs/` | Move the contract and link its governing perspective; keep rationale in Events |
+| A consequential choice cannot safely be resolved yet | `deferred_questions/` | Give it a safe boundary and evidence-based revisit condition; link its discussion |
+| Repeated coordination makes ownership rules hard to find | `governance/Documentation.md` | Own local routing and authority once; keep `AGENTS.md` a concise entry |
+| A maintenance problem demonstrably recurs | `trim_manual/` | Preserve a reusable procedure, not current findings or a new product rule |
+| One active investigation needs temporary coordination | A project-local scaffold | Keep it unregistered under a steering owner with reciprocal links; absorb results and delete both links with it |
 
-- Locate the target project's document-system and artifact boundaries before
-  comparison.
-- Understand responsibilities and pressures before choosing names. Use
-  coherent existing folder and file names as the visible organization; improve
-  unclear naming when the task authorizes it. Do not hide a mismatch behind a
-  second role assignment.
-- Use the recipe to notice missing, overloaded, duplicated, or unnecessary
-  responsibilities, then select only movements justified by the task. An owner
-  is overloaded only when meanings need independent authority or change
-  surfaces, not because it is long, dense, or combines roles separated here.
-- For genuinely new meaning, identify the highest relevant open owner rather
-  than automatically choosing the broadest profile. As consequences stabilize,
-  check whether more exact owners and artifacts carry them.
-- Treat trimming as post-absorption conservation: retain governing insight,
-  evidence, and live uncertainty; release duplicated obligation, expired
-  coordination, and misplaced realization detail.
-- Preserve deliberate combinations and departures. A comparison may conclude
-  that the current system should remain unchanged.
-- Do not infer adoption, initialization, or permission to mutate from the act
-  of consulting this reference.
+The worked steering extension continues Fieldbook's visit-comparison question.
+It adds one steering file and a truthful root relationship to `project.md`.
+In this example current Opening moves from the evidence discussion to steering;
+the earlier Events stay unchanged. This illustrates independent current focus,
+not a missing historical transition that must be filled in.
 
-## Optional materialization
+The other rows are options, not empty folders to create in advance. A small
+project can keep purpose and behavior together in `project.md` indefinitely.
+A unique useful Event needs no recurring-pressure justification; adding a
+standing documentation layer deserves stronger justification.
 
-The assets target format `2026-10-27` only. Confirm that the selected executable supports
-the single-manifest contract before claiming a valid materialization. Earlier
-projects require a separately reviewed manual adoption; no fallback carrier or
-automatic converter is included.
+## Adapting the assets
 
-Inspect `assets/recipe/` only when the requested work calls for adapting exact
-reusable files. Materialization may occur at any project phase and may use any
-subset that remains coherent after adaptation.
+The assets are a complete fictional worked example, not a placeholder template
+or a record of the target project's past:
 
-- Inspect every prospective destination and preserve existing meaning and
-  unrelated changes.
-- Omit, merge, rename, or relocate material to fit the target rather than
-  making the target conform to the asset.
-- Replace every retained template token with substantive local prose. Preserve
-  real uncertainty instead of fabricating an answer.
-- Register only entries worth maintaining. A record's presence is the managed
-  switch; selecting a directory does not select its descendants. Required
-  unregistered ancestors remain navigational context.
-- Keep one path per stable ID, with only useful descriptions and explicit index
-  markers. Let disk supply names, entry kinds, containment, and folder roles.
-  Update path bindings and ordinary links together on a move; preserve IDs and
-  deliberately repair affected relationships and SOE references.
-- Reconcile folder-local relationships, Opening, Event discussions and summary groups,
-  any retained transition participants and historical identities,
-  and Anchors with the actual document system. Preserve relationship vocabulary
-  where it adds meaning beyond placement. Keep procedure in ordinary guidance.
-- Generate Mermaid after validating the result; do not maintain or round-trip a
-  second tree in `PROJECT_MAP.mmd`. A saved diagram is optional output.
-- Validate the complete result, perform the
-  [navigation review](practice-realization.md#checking-navigable-relationships),
-  and review the diff. Adapting the manifest includes reading its authored relationships alongside
-  the actual folders and document templates. Reconcile
-  those relationships with local meaning instead of copying or dropping them
-  by default.
+- `assets/recipe/compact/` is the independently valid example.
+- `assets/recipe/extensions/steering/` contains one optional file plus
+  `manifest-additions.yaml`, an illustrative fragment, not a loadable manifest.
+  Its document path is relative to the target root.
 
-Materialized output contains none of these tokens:
+Copy neither directory wholesale into an existing project. First map the
+example's responsibilities to existing owners and inspect every proposed
+destination. Reuse existing discussions in place where possible. Replace the
+fictional purpose, evidence, decisions, and current question with supported
+local meaning; omit any Event the target does not need. Never manufacture
+history or a decision merely to fill the example.
 
-- `{{PROJECT_NAME}}`
-- `{{PROJECT_PURPOSE}}`
-- `{{PROJECT_USERS}}`
-- `{{PROJECT_BOUNDARY}}`
-- `{{SYSTEM_SUMMARY}}`
-- `{{COMPONENT_CONTRACTS}}`
-- `{{CURRENT_DEVELOPMENT_EDGE}}`
+For an isolated demonstration, copy only `compact/` to an empty target and
+initialize Git there. For the optional extension, place its steering file at
+the matching relative path, merge the fragment's components and relationship
+definitions, and append its relationship. Explicitly choose current Opening:
+the worked extension replaces the compact selection with the fragment's list.
+Do not replace a real project's whole manifest or infer this selection for it.
 
-The resulting project must remain intelligible without the recipe or
-Structuralist being installed.
+For real adoption, preserve stable IDs for existing entries and reconcile paths,
+links, relationships, Event references, and Opening with the chosen meaning.
+Register only what the project intends to maintain. Relationships obey actual
+folder locality; finer cross-folder claims remain ordinary prose links.
+Keep the result understandable without Structuralist installed.
+
+Require a format `2026-10-27` executable. Validate the complete adapted Region,
+Opening and Evolve views, follow the
+[navigation review](practice-realization.md#checking-navigable-relationships),
+and review exact prose and the diff. Mermaid may be generated afterward; it is
+never a second authored carrier. Earlier formats require a separately reviewed
+manual adoption.

@@ -4,8 +4,9 @@ import {
 } from "../presentationPreferences";
 import {
   MindflowMark,
-  StructureModeIcon,
-  TimelineModeIcon,
+  StructureIcon,
+  OpeningIcon,
+  EvolveIcon,
 } from "./Icons";
 
 interface ControlBarProps {
@@ -21,7 +22,9 @@ interface ControlBarProps {
   onInterfaceScaleChange: (
     change: "decrease" | "increase" | "reset",
   ) => void;
-  onToggleTimeline?: () => void;
+  onStructureHome?: () => void;
+  onFocusOpening?: () => void;
+  onOpenEvolve?: () => void;
   onToggleRegionOverview: () => void;
 }
 
@@ -36,28 +39,33 @@ export function ControlBar({
   onToggleQc,
   onStructureToolbarHost,
   onInterfaceScaleChange,
-  onToggleTimeline,
+  onStructureHome,
+  onFocusOpening,
+  onOpenEvolve,
   onToggleRegionOverview,
 }: ControlBarProps) {
   return (
     <div className="control-bar">
       <div className="layout-control" aria-label="Structure workspace controls">
         {regionAvailable ? (
-          <>
-            <span className="structure-workspace-label">
-              <StructureModeIcon />
-              Structure
-            </span>
-            {hasOpening ? (
-              <span
-                className="opening-cue-key"
-                title="Dashed amber boundaries mark Opening documents and folders containing them"
-              >
-                <i aria-hidden="true" />
-                Opening
-              </span>
-            ) : null}
-          </>
+          <div className="soe-controls" role="group" aria-label="Structure, Opening, and Evolve">
+            <button type="button" className="soe-button" data-soe="structure" data-structure-toggle
+              aria-pressed={!timelineOpen && !qcOpen} title="Structure home — return to project overview"
+              onClick={onStructureHome}>
+              <StructureIcon /><span>Structure</span>
+            </button>
+            <button type="button" className="soe-button" data-soe="opening"
+              disabled={!hasOpening} title={hasOpening ? "Focus current Opening documents in Structure" : "No current Opening documents"}
+              onClick={onFocusOpening}>
+              <OpeningIcon /><span>Opening</span>
+            </button>
+            <button type="button" className="soe-button" data-soe="evolve" data-timeline-toggle
+              aria-pressed={timelineOpen} disabled={!timelineAvailable}
+              title={timelineAvailable ? "Open Evolve" : "No Opening files, Events, or Anchors"}
+              onClick={onOpenEvolve}>
+              <EvolveIcon /><span>Evolve</span>
+            </button>
+          </div>
         ) : null}
         <div
           className="interface-scale-control"
@@ -93,24 +101,6 @@ export function ControlBar({
           </button>
         </div>
       </div>
-
-      {timelineAvailable ? (
-        <button
-          type="button"
-          className={`timeline-toggle${timelineOpen ? " is-active" : ""}`}
-          aria-pressed={timelineOpen}
-          data-timeline-toggle
-          title={
-            timelineOpen
-              ? "Close Evolve and return to Structure"
-              : "Open Evolve"
-          }
-          onClick={onToggleTimeline}
-        >
-          <TimelineModeIcon />
-          <span>Evolve</span>
-        </button>
-      ) : null}
 
       {onStructureToolbarHost ? (
         <div

@@ -11,7 +11,7 @@ Core, CLI, and GUI work without it.
 
 ## Install the complete package
 
-The [2026.10.27 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27) includes the complete package
+The [2026.10.29 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.29) includes the complete package
 in its source and offers a separate skill archive:
 
 ```text
@@ -23,6 +23,8 @@ skills/structuralist/
 │   ├── practice-realization.md
 │   └── recipe.md
 └── assets/recipe/
+    ├── compact/
+    └── extensions/
 ```
 
 With Python 3, run from this source checkout:
@@ -46,7 +48,7 @@ pass the exact destination to the installer:
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
 
-For the separate skill archive, extract it and enter `structuralist-2026.10.27/`.
+For the separate skill archive, extract it and enter `structuralist-2026.10.29/`.
 Run the same `./distribution/install-structuralist.sh` and `--check` commands
 there. The archive includes its installer and license notices. For manual
 installation, copy its complete `skills/structuralist/` directory into your
@@ -76,10 +78,26 @@ instructions and human decisions remain authoritative afterward.
 
 ## Recipe and adoption
 
-The included recipe is one optional worked arrangement, not a required document
-tree. It uses Markdown Events for discussions and nested summaries; use current
-design owners for accepted commitments, with ordinary links to their reasoning.
-Reuse existing owners before adding files. A small project may need only a few selected documents and no Opening or Event history yet.
+The five patterns remain distinction, position and relation, perspective,
+temporality, and transformation. The guidance loads only what the task needs;
+ordinary Event authoring can go directly to its focused instructions.
+
+Events preserve developing questions, alternatives, evidence, and decisions.
+A summary explains how finer Events belong together and what remains open;
+accepted commitments stay with current owners. Folding retains access to
+reasoning. Consolidating or removing it requires preserving meaningful evidence
+and uncertainty, not merely hiding detail.
+
+The [recipe](../skills/structuralist/references/recipe.md) offers a
+[compact worked example](../skills/structuralist/assets/recipe/compact/project.md)
+with two discussions and a summary. Its optional steering extension shows how
+a continuing concern can move into current Opening without changing Event
+history. Profiles, contracts, governance, deferred choices, and maintenance
+procedures are further options when a project needs those responsibilities.
+
+Use existing owners before adding files. These are fictional examples to adapt,
+not history to copy into a project. A small project may need only a few selected
+documents and no Opening or Event history yet.
 
 [First use](quick-start.md) separates CLI setup, skill installation, and project
 adoption. The current format uses one manifest and filesystem-derived hierarchy.

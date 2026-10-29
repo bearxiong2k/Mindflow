@@ -9,55 +9,40 @@ fi
 
 mindflow_command="$1"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-mindflow_root="$(cd "$script_dir/.." && pwd)"
-asset_root="$mindflow_root/skills/structuralist/assets/recipe"
-fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/mindflow-structuralist-recipe.XXXXXX")"
+asset_root="$script_dir/../skills/structuralist/assets/recipe"
 
-cleanup() {
-  rm -rf "$fixture_root"
-}
-trap cleanup EXIT
-
-cp -R "$asset_root/." "$fixture_root/"
-find "$fixture_root" -type f -exec perl -pi -e '
-  s/\{\{PROJECT_NAME\}\}/Fixture Project/g;
-  s/\{\{PROJECT_PURPOSE\}\}/Fixture Project keeps one behavior understandable across human-agent development./g;
-  s/\{\{PROJECT_USERS\}\}/Project maintainers and their agents use it together./g;
-  s/\{\{PROJECT_BOUNDARY\}\}/It does not prescribe unrelated team workflow./g;
-  s/\{\{SYSTEM_SUMMARY\}\}/One local component realizes the project contract./g;
-  s/\{\{COMPONENT_CONTRACTS\}\}/The component reads one local input and returns one deterministic result./g;
-  s/\{\{CURRENT_DEVELOPMENT_EDGE\}\}/Validate the initial contract against the first implementation./g;
-' {} +
-
-if grep -R -E '\{\{[A-Z_]+\}\}' "$fixture_root" >/dev/null; then
-  echo "error: unresolved recipe template token" >&2
-  exit 1
-fi
-
-if [[ -e "$fixture_root/PROJECT_MAP.mmd" ]]; then
-  echo "error: the recipe must not ship an authored Mermaid carrier" >&2
-  exit 1
-fi
-
-git -C "$fixture_root" init -q
-git -C "$fixture_root" add .
-"$mindflow_command" --root "$fixture_root" check --json
-"$mindflow_command" --root "$fixture_root" map >/dev/null
-"$mindflow_command" --root "$fixture_root" topology view \
-  --depth 3 --max-nodes 512 --json >/dev/null
-python3 - "$mindflow_command" "$fixture_root" <<'PY'
+python3 - "$mindflow_command" "$asset_root" <<'PY'
+import hashlib
 import json
+from pathlib import Path
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
+from urllib.parse import unquote
 
-command, root = sys.argv[1:]
+command, assets = sys.argv[1:]
+assets = Path(assets)
 
 
-def probe(*address):
+def yaml_document(path):
+    # Ruby/Psych is already required by the package validator.
     return json.loads(subprocess.check_output([
-        command, "--root", root, "topology", "probe", *address,
-        "--depth", "1", "--max-nodes", "128", "--json",
+        "ruby", "-ryaml", "-rjson", "-e",
+        "puts JSON.generate(YAML.safe_load(File.read(ARGV[0]), aliases: false))",
+        str(path),
     ], text=True))
+
+
+def run(root, *arguments):
+    return subprocess.check_output(
+        [command, "--root", str(root), *arguments], text=True)
+
+
+def probe(root, *address):
+    return json.loads(run(root, "topology", "probe", *address,
+                          "--depth", "1", "--max-nodes", "128", "--json"))
 
 
 def edges(relationships):
@@ -65,67 +50,113 @@ def edges(relationships):
             for r in relationships}
 
 
-def require_edges(label, actual, expected):
-    missing = expected - actual
-    if missing:
-        raise SystemExit(f"recipe {label} is missing authored meaning: {sorted(missing)}")
+def check_links(root):
+    # Check links after materialization: extension prose uses target-root paths.
+    root = root.resolve()
+    for source in root.rglob("*.md"):
+        text = source.read_text()
+        assert not re.search(r"\{\{[A-Z_]+\}\}", text), source
+        for link in re.findall(r"\[[^\]]*\]\(([^)]+)\)", text):
+            if re.match(r"(?:https?://|mailto:)", link):
+                continue
+            path, _, fragment = unquote(link).partition("#")
+            target = (source.parent / path).resolve() if path else source
+            assert target.is_relative_to(root), (source, link)
+            assert target.exists(), (source, link)
+            if fragment:
+                headings = re.findall(r"^#+\s+(.+)$", target.read_text(), re.M)
+                anchors = {re.sub(r"[^\w\- ]", "", h.lower()).replace(" ", "-")
+                           for h in headings}
+                assert fragment in anchors, (source, link)
 
 
-def run(*arguments):
-    return subprocess.check_output([command, "--root", root, *arguments], text=True)
+def check_example(root, opening_id):
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    assert json.loads(run(root, "check", "--json"))["valid"]
+    check_links(root)
 
-status = json.loads(run("status", "--json"))
-versions = json.loads(run("version", "--json"))
-assert versions["project"]["adopted_release"] == "2026.10.27"
-assert status["schema"] == "mindflow-status/v6"
-region = status["region"]
-assert region["format"] == "2026-10-27" and region["schema"] == "mindflow-region-index/v7"
-assert "roles" not in region and "project_map" not in region
-assert len(region["documents"]) == 11
-before = json.loads(run("map"))
-assert all(node["name"] == node["path"].rsplit("/", 1)[-1]
-           for node in before["nodes"] if node["path"] != ".")
-from pathlib import Path
-export = Path(root) / "PROJECT_MAP.mmd"
-generated = run("topology", "view", "--depth", "3", "--max-nodes", "512", "--mermaid")
-assert generated.startswith("flowchart TD\n") and "snapshot=" in generated
-export.write_text(generated)
-assert json.loads(run("map")) == before
-export.write_text("This is deliberately not Mermaid.\n")
-assert json.loads(run("map")) == before
-export.unlink()
-assert json.loads(run("map")) == before
+    status = json.loads(run(root, "status", "--json"))
+    version = json.loads(run(root, "version", "--json"))
+    assert version["project"]["adopted_release"] == "2026.10.27"
+    assert status["schema"] == "mindflow-status/v6"
+    region = status["region"]
+    assert region["format"] == "2026-10-27"
+    assert region["schema"] == "mindflow-region-index/v7"
+    assert "roles" not in region and "project_map" not in region
 
-# These are this recipe's commitments, not a connectivity policy for projects.
-authority = {(source, "is governed by", "source-to-target", "governance")
-             for source in ("profiles", "canonical", "deferred", "trim_guidance", "steering")}
-authority.add(("canonical", "is governed by", "source-to-target", "profiles"))
-steering = {("steering", "tracks development of", "source-to-target", target)
-            for target in ("profiles", "canonical")}
-overview = authority | steering
-require_edges("root overview", edges(probe()["structure"]["relationships"]), overview)
+    manifest = yaml_document(root / "MINDFLOW.yaml")
+    for identity, component in manifest["components"].items():
+        path = root / component["path"]
+        if path.suffix == ".md":
+            assert run(root, "topology", "read", identity) == path.read_text()
 
-for directory, identity in (("profiles", "profiles"), ("canonical_docs", "canonical"),
-                            ("long_term_steering", "steering")):
-    scope = probe(directory)
-    if scope["structure"]["focus"]["component"]["id"] != identity:
-        raise SystemExit(f"recipe directory {directory} resolves to the wrong owner")
-    require_edges(f"{directory} incidence",
-                  edges([i["relationship"] for i in scope["incidences"]]),
-                  {r for r in overview if identity in (r[0], r[3])})
-    if identity == "profiles":
-        require_edges("profile peers", edges(scope["structure"]["relationships"]), {
-            ("profile_product", "shares an evolving boundary with", "bidirectional",
-             "profile_architecture"),
-        })
+    opening = json.loads(run(root, "opening", "show", "--json"))
+    assert opening["files"] == [{
+        "component": opening_id,
+        "path": manifest["components"][opening_id]["path"],
+    }]
+    page = json.loads(run(root, "evolve", "events", "--json"))
+    assert page["schema"] == "mindflow-evolve-event-page/v3"
+    events = page["events"]
+    assert page["total"] == len(events) == 3
+    assert [e["component"] for e in events] == [
+        "browsing_summary", "browsing_question", "browsing_evidence"]
+    assert events[0]["children"] == ["browsing_question", "browsing_evidence"]
+    assert all(e["children"] == [] for e in events[1:])
+    assert all("opening" not in e for e in events)
+    for event in events:
+        content = (root / event["file"]).read_bytes()
+        assert event["content"] == {
+            "sha256": "sha256:" + hashlib.sha256(content).hexdigest(),
+            "bytes": len(content),
+        }
 
-print("Structuralist recipe root, folder incidence, and peer relationships are visible")
+    before = json.loads(run(root, "map"))
+    assert all(node["name"] == Path(node["path"]).name
+               for node in before["nodes"] if node["path"] != ".")
+    run(root, "topology", "view", "--depth", "3", "--max-nodes", "512", "--json")
+    generated = run(root, "topology", "view", "--depth", "3",
+                    "--max-nodes", "512", "--mermaid")
+    assert generated.startswith("flowchart TD\n") and "snapshot=" in generated
+    export = root / "PROJECT_MAP.mmd"
+    assert not export.exists(), "recipe must not ship an authored Mermaid carrier"
+    for text in (generated, "This is deliberately not Mermaid.\n"):
+        export.write_text(text)
+        assert json.loads(run(root, "map")) == before
+    export.unlink()
+    assert json.loads(run(root, "map")) == before
+    return events
+
+
+with tempfile.TemporaryDirectory(prefix="mindflow-structuralist-recipe-") as tmp:
+    compact = Path(tmp) / "compact"
+    shutil.copytree(assets / "compact", compact)
+    original_events = check_example(compact, "browsing_evidence")
+    # This example deliberately uses prose links and containment, not invented edges.
+    assert probe(compact)["structure"]["relationships"] == []
+
+    extended = Path(tmp) / "with-steering"
+    shutil.copytree(assets / "compact", extended)
+    extension = assets / "extensions/steering"
+    shutil.copytree(extension / "long_term_steering", extended / "long_term_steering")
+    manifest = yaml_document(extended / "MINDFLOW.yaml")
+    additions = yaml_document(extension / "manifest-additions.yaml")
+    for field in ("components", "relationship-types"):
+        assert not (manifest[field].keys() & additions[field].keys())
+        manifest[field].update(additions[field])
+    manifest["relationships"].extend(additions["relationships"])
+    manifest["opening"] = additions["opening"]
+    # JSON is valid YAML; no extra Python YAML dependency is needed for fixtures.
+    (extended / "MINDFLOW.yaml").write_text(json.dumps(manifest, indent=2) + "\n")
+    assert check_example(extended, "visit_comparison") == original_events
+
+    relation = ("steering", "tracks development of", "source-to-target", "project_account")
+    assert relation in edges(probe(extended)["structure"]["relationships"])
+    scope = probe(extended, "long_term_steering")
+    assert scope["structure"]["focus"]["component"]["id"] == "steering"
+    assert relation in edges([i["relationship"] for i in scope["incidences"]])
+
+print("Structuralist compact and extended recipes validate: exact prose, links, "
+      "summary children, independent Opening, and scoped relationships")
 PY
-"$mindflow_command" --root "$fixture_root" topology resolve \
-  profile_product --json >/dev/null
-"$mindflow_command" --root "$fixture_root" topology read \
-  canonical_system >/dev/null
-"$mindflow_command" --root "$fixture_root" opening show --json >/dev/null
-"$mindflow_command" --root "$fixture_root" evolve events --json >/dev/null
-
-echo "Structuralist recipe materialization fixture is valid"

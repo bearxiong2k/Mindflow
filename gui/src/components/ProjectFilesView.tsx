@@ -348,7 +348,7 @@ export function ProjectFilesView({
     setRevealRequest({ path, kind: "navigation" });
   }, [onExpandedPathsChange]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const initial = initialDirectoryRef.current;
     initialDirectoryRef.current = false;
     const previous = previousDirectoryRef.current;
@@ -532,42 +532,53 @@ export function ProjectFilesView({
         setRevealRequest((current) => current === revealRequest ? undefined : current);
       }
     };
-    const reveal = () => {
-      if (cancelled) return;
-      // Folding runs first. Measure once in content coordinates after it
-      // settles, then animate to one fixed endpoint, never a moving center.
+    const folding = tree.getAnimations({ subtree: true }).filter((animation) =>
+      animation.effect instanceof KeyframeEffect &&
+      animation.effect.target instanceof Element &&
+      animation.effect.target.classList.contains("project-directory__children"));
+    const positions = folding.map(animation => ({ animation, time: animation.currentTime ?? 0 }));
+    const from = tree.scrollTop;
+    let target: number;
+    try {
+      // Sample the settled layout before paint, then restore the live folding.
+      // Scrolling can share its first frame and fixed endpoint with the fold,
+      // without waiting for it or chasing rows as their heights change.
+      for (const { animation } of positions) {
+        const end = animation.effect?.getComputedTiming().endTime;
+        if (typeof end === "number" && Number.isFinite(end)) animation.currentTime = end;
+      }
       const bounds = row?.getBoundingClientRect();
+      const treeBounds = tree.getBoundingClientRect();
+      const scale = tree.offsetHeight ? treeBounds.height / tree.offsetHeight : 1;
       const previewHeight = revealRequest.kind === "navigation" || revealRequest.revealContents ? Math.min(
-        row?.nextElementSibling?.getBoundingClientRect().height ?? 0,
+        (row?.nextElementSibling?.getBoundingClientRect().height ?? 0) / scale,
         tree.clientHeight / 3, 160,
       ) : 0;
-      const from = tree.scrollTop;
-      const target = bounds ? projectFilesRevealScrollTop(
+      target = bounds ? projectFilesRevealScrollTop(
         from, tree.clientHeight,
-        bounds.top - tree.getBoundingClientRect().top + from,
-        bounds.height + previewHeight, tree.scrollHeight,
+        (bounds.top - treeBounds.top) / scale + tree.scrollTop,
+        bounds.height / scale + previewHeight, tree.scrollHeight,
       ) : 0;
-      if (Math.abs(target - from) < 1 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        tree.scrollTop = target;
-        finish();
-        return;
-      }
+    } finally {
+      for (const { animation, time } of positions) animation.currentTime = time;
+      // Measuring a shorter final tree may clamp scrollTop; no such jump is
+      // allowed to escape this layout measurement into the visible animation.
+      tree.scrollTop = from;
+    }
+    if (Math.abs(target - from) < 1 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      tree.scrollTop = target;
+      finish();
+    } else {
       const start = performance.now();
       const step = (now: number) => {
+        if (cancelled) return;
         const progress = Math.min(1, (now - start) / PROJECT_FILES_NAVIGATION_MS);
         tree.scrollTop = from + (target - from) * (1 - (1 - progress) ** 3);
         if (progress < 1) frame = window.requestAnimationFrame(step);
         else finish();
       };
       frame = window.requestAnimationFrame(step);
-    };
-    const folding = tree.getAnimations({ subtree: true }).filter((animation) =>
-      animation.effect instanceof KeyframeEffect &&
-      animation.effect.target instanceof Element &&
-      animation.effect.target.classList.contains("project-directory__children"));
-    void Promise.all(folding.map((animation) => animation.finished.catch(() => {}))).then(() => {
-      if (!cancelled) frame = window.requestAnimationFrame(reveal);
-    });
+    }
     return () => {
       cancelled = true;
       window.cancelAnimationFrame(frame);

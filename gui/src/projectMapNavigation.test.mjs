@@ -11,6 +11,7 @@ import {
   projectMapComponentActivation,
   projectMapMaximumDepth,
   projectMapChildrenByParent,
+  projectMapOpeningFocus,
   projectMapViewingDepth,
   projectMapViewingDepthsWith,
 } from "./projectMapNavigation.ts";
@@ -99,6 +100,28 @@ const map = {
     },
   ],
 };
+
+test("Opening navigation reveals its full selection in the nearest shared folder", () => {
+  const extra = [
+    {id: "sibling", kind: "document", parent: "substrate", managed: true, order: 7},
+    {id: "elsewhere", kind: "document", parent: "profiles", managed: true, order: 8},
+  ];
+  const region = {...map, components: [...components, ...extra]};
+  const opening = (...ids) => ({files: ids.map(component => ({component, path: `${component}.md`}))});
+  assert.deepEqual(projectMapOpeningFocus(region, opening("document")),
+    {focusId: "substrate", depth: 1, fitComponentIds: ["document"]});
+  assert.deepEqual(projectMapOpeningFocus(region, opening("sibling", "document")),
+    {focusId: "substrate", depth: 1, fitComponentIds: ["sibling", "document"]});
+  const target = projectMapOpeningFocus(region, opening("document", "elsewhere"));
+  assert.deepEqual(target, {focusId: "root", depth: 3, fitComponentIds: ["document", "elsewhere"]});
+  const projection = deriveProjectMapFocusProjection(region, target.focusId, new Set(["governs"]),
+    true, opening("document", "elsewhere"), target.depth);
+  const visible = layer => [...layer.primary.map(c => c.id), ...layer.expanded.flatMap(visible)];
+  assert.ok(target.fitComponentIds.every(id => visible(projection).includes(id)));
+  assert.ok(visible(projection).includes("sibling")); // surrounding Structure remains available
+  assert.equal(projectMapOpeningFocus(region, opening()), undefined);
+  assert.equal(projectMapOpeningFocus(region, opening("document", "missing")), undefined);
+});
 
 test("the root projection retains existing directory scopes", () => {
   const projection = deriveProjectMapFocusProjection(

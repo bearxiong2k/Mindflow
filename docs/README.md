@@ -1,6 +1,6 @@
 # Mindflow guides
 
-These guides describe the [2026.10.27 source beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.27)
+These guides describe the [2026.10.29 source beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.29)
 and project format `2026-10-27`. No guide requires access to the private
 development laboratory.
 

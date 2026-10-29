@@ -1,0 +1,22 @@
+# Example fragment: merge definitions and append the relationship.
+# The worked example explicitly replaces current opening.files with this list.
+# It leaves evolve.events unchanged. This file is not a standalone manifest.
+components:
+  steering:
+    path: long_term_steering
+  visit_comparison:
+    path: long_term_steering/visit-comparison.md
+
+relationship-types:
+  tracks development of:
+    description: The source carries continuing intent whose accepted behavior belongs in the target.
+    direction: directional
+
+relationships:
+  - source: steering
+    type: tracks development of
+    direction: source-to-target
+    target: project_account
+
+opening:
+  files: [visit_comparison]

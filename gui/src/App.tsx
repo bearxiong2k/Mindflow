@@ -1,5 +1,5 @@
 import { documentDirectory, documentRelationships } from "./types.ts";
-import { projectMapFor } from "./projectMapNavigation.ts";
+import { projectMapFor, projectMapOpeningFocus } from "./projectMapNavigation.ts";
 import { HelpOnly } from "./components/InterfaceHelp";
 import {
   forwardRef,
@@ -959,19 +959,41 @@ const RegionWorkspace = forwardRef<
     [],
   );
 
-  const toggleTimeline = useCallback(() => {
-    workspaceElement.current?.querySelector<HTMLButtonElement>("[data-timeline-toggle]")?.focus();
-    if (qcOpen) {
-      setQcOpen(false);
-      setTimelineOpen(true);
-      return;
-    }
-    setTimelineOpen((current) => !current);
-  }, [qcOpen]);
-
   const toggleQc = useCallback(() => {
     setQcOpen((current) => !current);
     workspaceElement.current?.querySelector<HTMLButtonElement>("[data-qc-toggle]")?.focus();
+  }, []);
+
+  const showStructure = useCallback(() => {
+    setQcOpen(false);
+    setTimelineOpen(false);
+    setRegionOverviewOpen(false);
+    workspaceElement.current?.querySelector<HTMLButtonElement>("[data-structure-toggle]")?.focus();
+  }, []);
+
+  const goToStructureHome = useCallback(() => {
+    showStructure();
+    setNavigationHover(undefined);
+    setMapNavigationRequest(current => ({
+      focusId: projectMapFor(graph).root,
+      depth: 1,
+      fitGraph: true,
+      revision: (current?.revision ?? 0) + 1,
+    }));
+  }, [graph, showStructure]);
+
+  const focusOpening = useCallback(() => {
+    const target = projectMapOpeningFocus(projectMapFor(graph), region.opening);
+    if (!target) return;
+    showStructure();
+    setNavigationHover(undefined);
+    setMapNavigationRequest(current => ({ ...target, revision: (current?.revision ?? 0) + 1 }));
+  }, [graph, region.opening, showStructure]);
+
+  const openEvolve = useCallback(() => {
+    setQcOpen(false);
+    setRegionOverviewOpen(false);
+    setTimelineOpen(true);
   }, []);
 
   const regionIsEmpty = !graph.structure.nodes.some((node) => node.component);
@@ -1017,7 +1039,9 @@ const RegionWorkspace = forwardRef<
             onToggleQc={toggleQc}
             onStructureToolbarHost={setStructureToolbarHost}
             onInterfaceScaleChange={changeInterfaceScale}
-            onToggleTimeline={toggleTimeline}
+            onStructureHome={goToStructureHome}
+            onFocusOpening={focusOpening}
+            onOpenEvolve={openEvolve}
             onToggleRegionOverview={() =>
               setRegionOverviewOpen((current) => !current)
             }
@@ -1112,7 +1136,7 @@ const RegionWorkspace = forwardRef<
                       inspectorHeight={evolveInspectorHeight}
                       onInspectorHeightChange={updateEvolveInspectorHeight}
                       onSelect={selectDocument}
-                      onClose={toggleTimeline}
+                      onClose={showStructure}
                     />
                   </Suspense>
                 </section>

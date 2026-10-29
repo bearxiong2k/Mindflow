@@ -1,7 +1,7 @@
 # CLI
 
 The CLI reconstructs one project-owned Region from ordinary files, its manifest,
-and Git. Commands below describe source release `2026.10.27`. Use
+and Git. Commands below describe source release `2026.10.29`. Use
 `mindflow --help` and each subcommand's `--help` for exact options.
 
 ## Select a project and inspect it

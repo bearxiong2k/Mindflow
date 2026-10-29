@@ -8,6 +8,9 @@ export function sameProjectDirectoryEntries(left: readonly ProjectEntry[], right
 export interface ProjectMapNavigationRequest {
   focusId: string;
   revision: number;
+  depth?: number;
+  fitGraph?: boolean;
+  fitComponentIds?: readonly string[];
 }
 
 // Bindings are root-relative. Never turn a URL, glob, or outside-root path into
@@ -68,7 +71,7 @@ export function nearestVisibleProjectPath(
   return undefined;
 }
 
-export const PROJECT_FILES_NAVIGATION_MS = 180;
+export const PROJECT_FILES_NAVIGATION_MS = 100;
 export const PROJECT_FILES_HOVER_INTENT_MS = 80;
 
 // A collapsed category exposes its row; an expanded map region also exposes

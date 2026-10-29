@@ -1,0 +1,29 @@
+format: "2026-10-27"
+adopted-release: "2026.10.27"
+
+components:
+  project:
+    path: "."
+  project_account:
+    path: project.md
+  browsing_question:
+    path: evolve/browsing-question.md
+  browsing_evidence:
+    path: evolve/browsing-evidence.md
+  browsing_summary:
+    path: evolve/browsing-summary.md
+
+relationship-types: {}
+relationships: []
+anchor-connection-types: {}
+
+opening:
+  files: [browsing_evidence]
+
+evolve:
+  events:
+    - component: browsing_summary
+      children: [browsing_question, browsing_evidence]
+    - component: browsing_question
+    - component: browsing_evidence
+anchors: {}
