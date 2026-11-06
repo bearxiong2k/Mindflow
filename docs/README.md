@@ -1,6 +1,6 @@
 # Mindflow guides
 
-These guides describe the [2026.11.6 source beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6)
+These guides describe the [2026.11.6-r1 source beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6-r1)
 and project format `2026-10-27`. No guide requires access to the private
 development laboratory.
 

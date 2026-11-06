@@ -26,9 +26,9 @@ task; do not infer the whole from filenames or a search sample.
 
 Read how the project currently directs this kind of work. Its maintained
 instructions and authorized human direction govern goals, methods, evidence,
-and stopping conditions. Help revise that practice when the task calls for it;
-do not substitute the recipe's cycle for it. A project's phase or problem can
-change which movements are useful and how they are combined.
+and stopping conditions. Help revise that practice when the task calls for it.
+Project-local design and guidance take priority over the recipe's working
+defaults; a change in phase or problem can call for different methods.
 
 Distinguish the language through which the project understands, directs, and
 evolves itself from the artifacts it produces. A template, manual, or other
@@ -58,19 +58,19 @@ from the recipe alone never justifies a split or trim.
 
 ## Realize the practice when needed
 
-Use [practice-realization.md](references/practice-realization.md) for applying
-the patterns within project-owned practice, judging evidence and claims, and
-exact Mindflow operations. For a bounded Event authoring or summarization task,
-go directly to its
+Use [recipe.md](references/recipe.md), **A Working Guide to Project
+Documentation**, when establishing or improving documentation practice. It
+states the maintainer's working defaults for organization, authority, change
+routing, development, writing, and completion, with Fieldbook as an illustration.
+Apply the relevant guidance within the project's own design; keep adopted
+choices at their local owners. One responsibility does not require the whole
+arrangement or its example files.
+
+Use [practice-realization.md](references/practice-realization.md) for exact
+Mindflow operations and navigation checks. A bounded Event authoring or
+summarization task can go directly to its
 [Event guidance](references/practice-realization.md#authoring-event-discussions-and-summaries);
 load a pattern only when a substantive judgment needs it.
-
-Use [recipe.md](references/recipe.md) when a concrete comparison would help
-choose or adapt responsibilities. It presents a compact example and optional
-extensions, including one complete development cycle. The worked sequence
-illustrates local choices at one moment, not phases other projects must follow.
-Existing local names and coherent combinations remain valid. A request about
-one responsibility does not require the whole recipe.
 
 Inspect `assets/recipe/` only for requested materialization or adaptation. The
 example illustrates choices; it supplies neither a target project's history
@@ -78,8 +78,9 @@ nor permission to create files.
 
 ## Keep the work locally grounded
 
-- Follow the project's authority and preserve pre-existing work. The skill,
-  recipe, conversation, and generated views do not govern the project.
+- Follow the project's authority and preserve pre-existing work. The recipe
+  supplies defaults; deliberately adopted local guidance owns the resulting
+  practice. Conversation and generated views do not govern the project.
 - Explicit invocation selects a method, not mutation permission. Within an
   authorized scope, make ordinary semantics-preserving repairs directly. Seek
   the proper authority when a choice would redirect the project, weaken a

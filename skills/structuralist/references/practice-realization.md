@@ -1,55 +1,10 @@
-# Current Practice Realization
+# Mindflow Practice Realization
 
-Use the project's own vocabulary. The responsibility glossary is advisory;
-Mindflow mechanics must agree with the installed version. The five patterns
-supply judgment; this reference connects it to locally maintained practice.
-
-## Work through the project's current practice
-
-Locate the instructions and owners that govern the requested work. A project
-may be exploring its purpose, constructing something, correcting a defect,
-operating a service, or reconsidering an established direction. Its current
-goals, authority, methods, and obligations determine the useful intervention.
-An example from another phase supplies a comparison, not an operating policy.
-When the practice itself no longer fits, make the authorized revision at its
-local owner rather than leaving a new rule only in the conversation.
-
-Use the following questions where they change a decision; they are not stages,
-a required intake form, or reasons to expand a bounded task:
-
-- **Purpose and scope:** What understanding, behavior, or outcome needs to
-  change, and which present commitments govern it? If choosing further work,
-  consider the relevant wider direction instead of automatically extending the
-  last task. A direct repair can follow its existing contract.
-- **Basis for work and claims:** What is known, what is being assumed, and what
-  evidence would support the intended conclusion? Separate what is needed to
-  begin from what must be established before claiming the result. Exploration
-  can clarify a question; construction can supply missing implementation.
-- **Consequences and remaining work:** Where do accepted meaning, realized
-  behavior, evidence, and useful reasoning belong? Update the affected owners
-  and local direction when their meaning changes. Retain live uncertainty and
-  release temporary coordination after its necessary content is absorbed.
-
-The project can reorder, combine, revisit, or omit these movements. Work may
-end with a repair, an unresolved question, a changed approach, or no structural
-change. Continuing direction, an experiment, a scaffold, and an Event are not
-prerequisites for ordinary work. A task's completion does not authorize another
-task or require inventing a next question.
-
-## Keep evidence and conclusions at their proper scope
-
-An accepted requirement, implemented behavior, observed result, and broader
-claim can differ. Read the relevant artifacts and evidence as well as their
-accounts. Keep the observation's conditions, method, limitations, and useful
-counterevidence discoverable at its owner. The kind and strength of evidence
-depend on the project and claim; not every question needs an experiment or the
-same qualification process.
-
-A passing check establishes only what it checks. A local improvement may leave
-the intended outcome unchanged. A loss, tie, or failed assumption can refine
-the direction; it need not be rewritten as success. An Event explains what the
-evidence changed in the project's understanding and links to the evidence and
-accepted consequences. It need not copy results or become their maintained owner.
+Use this reference for versioned Mindflow operations, Event authoring, and
+navigation checks. The [working documentation guide](recipe.md) owns the
+recipe's recommendations for organization, change routing, writing, evidence,
+and maintenance. Follow the target project's own design and maintained guidance
+when applying them.
 
 ## Mindflow operations
 
@@ -101,38 +56,6 @@ participation, not file types, quality ranks, or permanent stages. One artifact
 may participate in both; repository visibility alone never selects the Region.
 Procedures, execution, lifecycle judgments, and formalization levels remain
 outside SOE. Unregistering a file and deleting it are separate actions.
-
-## Responsibilities in ordinary files
-
-These are functions that may share a file, not required directories or stages.
-
-| Responsibility | What it keeps intelligible |
-| --- | --- |
-| Current owner | An accepted commitment, durable perspective, or exact contract |
-| Evidence account | Observations, checks, conditions, and limits supporting a scoped conclusion |
-| Event discussion | A developing question, alternatives, evidence, changed understanding, or decision |
-| Summary Event | The meaning of a group of finer Events, including what remains unsettled |
-| Steering | Continuing intent, the current edge, and where its results should be absorbed |
-| Deferred question | A consequential protected choice, its safe boundary, and evidence that would justify revisiting it |
-| Scaffold | Disposable coordination for an accountable task or owner, with a clear purpose and disposition |
-| Maintenance guidance | A reusable response to a demonstrated recurring pressure |
-
-An Event need not be settled. A summary need not declare closure. An unanswered
-question may remain in its discussion; give it a distinct deferred owner when
-it needs a protected boundary and revisit condition. Steering keeps the current
-direction readable without becoming a transcript or a second contract.
-
-Use the project's existing tests, research, operational records, or other
-evidence owners; a separate evidence directory is optional. A scaffold follows
-local ownership and linking rules. It does not require introducing a continuing
-steer solely to host a one-time task.
-
-For a new standing owner, folder, or procedure, consider the distinct recurring
-responsibility, why existing owners are insufficient, carrying cost, and when
-to simplify it. This is not an admission ceremony for each registration,
-relationship, or Event. A useful one-time development can deserve an Event.
-Ordinary registrations and relationships need truthful scope and clear purpose,
-not evidence of recurrence.
 
 ## Authoring Event discussions and summaries
 

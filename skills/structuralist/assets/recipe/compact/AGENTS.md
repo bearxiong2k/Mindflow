@@ -1,18 +1,14 @@
 # Fieldbook repository guidance
 
-Read [the project account](project.md) for current purpose, behavior, and working
-practice, then the affected discussion. [Browsing summary](evolve/browsing-summary.md) links
-the reasoning behind the current browsing choice.
+Read [the project account](project.md) for purpose, accepted behavior, and
+current working practice. Its [ownership rules](project.md#documentation-ownership)
+govern changes. Follow the relevant evidence and discussion links for the task;
+[browsing summary](evolve/browsing-summary.md) introduces the current reasoning.
 
-Keep accepted commitments in their current owner. Use Event discussions for
-questions, alternatives, evidence, and changed understanding; a summary should
-explain their relationship and link to the owner of accepted consequences.
-Routine edits need no Event.
-
-Choose work and checks for the actual question under that local practice.
 Keep observations and their limits in the
-[evidence account](evidence/browsing-walkthrough.md).
-The illustrated design cycle is not a required workflow for subsequent tasks.
+[evidence account](evidence/browsing-walkthrough.md). Use the project's current
+methods and checks for the actual question. The illustrated design cycle is
+one completed task; ordinary repairs need no new Event or continuing steer.
 
 Edit ordinary files and `MINDFLOW.yaml` coherently. Select current Opening
 explicitly and record file transitions only when the discussion describes one.

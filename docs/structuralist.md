@@ -11,7 +11,7 @@ Core, CLI, and GUI work without it.
 
 ## Install the complete package
 
-The [2026.11.6 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6) includes the complete package
+The [2026.11.6-r1 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6-r1) includes the complete package
 in its source and offers a separate skill archive:
 
 ```text
@@ -48,7 +48,7 @@ pass the exact destination to the installer:
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
 
-For the separate skill archive, extract it and enter `structuralist-2026.11.6/`.
+For the separate skill archive, extract it and enter `structuralist-2026.11.6-r1/`.
 Run the same `./distribution/install-structuralist.sh` and `--check` commands
 there. The archive includes its installer and license notices. For manual
 installation, copy its complete `skills/structuralist/` directory into your
@@ -93,9 +93,15 @@ stopping conditions. Structuralist helps an agent follow and, when requested,
 revise that practice. A repair, exploratory inquiry, or operational problem can
 use different methods and need no new Event, continuing steer, or scaffold.
 
-The [recipe](../skills/structuralist/references/recipe.md) offers a
-[compact worked example](../skills/structuralist/assets/recipe/compact/project.md)
-covering one complete bounded design cycle: a question, a paper walkthrough,
+The [recipe](../skills/structuralist/references/recipe.md), **A Working Guide to
+Project Documentation**, gives the maintainer's preferred defaults for
+ownership, authority, change routing, writing, evidence, and completion. Its
+Mermaid Structure map shows the suggested folders, files, and relationships.
+Project-local design and maintained guidance take priority; adopted rules
+belong in the project's own documentation. Responsibilities can share files.
+
+The [compact Fieldbook example](../skills/structuralist/assets/recipe/compact/project.md)
+illustrates the guide through one bounded design cycle: a question, a paper walkthrough,
 changed understanding, accepted behavior and revised local practice, a summary,
 and remaining uncertainty. Its separate evidence account preserves observations
 and limits; Events interpret them and link consequences to their current owners.
@@ -104,9 +110,8 @@ measured user outcomes. Its sequence is an example to adapt to the project's
 situation.
 
 The optional steering extension shows how a continuing concern can move into
-current Opening without changing Event history. Profiles, readable contracts,
-exact specifications, governance, deferred choices, and maintenance procedures
-are further options when a project needs those responsibilities.
+current Opening without changing Event history. Use the guide's ownership and
+change-routing rules to decide when a responsibility needs a separate owner.
 
 Use existing owners before adding files. These are fictional examples to adapt,
 not history to copy into a project. A small project may need only a few selected

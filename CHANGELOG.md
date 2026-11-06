@@ -4,6 +4,26 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 private laboratory; this repository receives reviewed source releases.
 
+## [2026.11.6-r1](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6-r1) — Structuralist working guide prerelease
+
+- Recasts the Structuralist recipe as a working documentation guide with
+  concrete defaults for ownership, authority, change routing, development
+  practice, writing, evidence, and completion.
+- Makes project-local design and maintained guidance explicitly take priority.
+  The five patterns remain unchanged; adopted conventions stay in the project.
+- Adds a Mermaid Structure map of the suggested documentation folders, files,
+  and relationships. Fieldbook illustrates the guide with its existing scoped
+  evidence, Event discussions, summary, and optional steering extension.
+- Consolidates general practice in the recipe and keeps the operational
+  reference focused on Mindflow commands, Event authoring, and navigation.
+
+This is a new immutable publication of calendar release `2026.11.6`. The CLI
+and app keep version `2026.11.6`, and the project format remains `2026-10-27`.
+Existing projects require no format conversion. Source and standalone skill
+archives include installation guidance, license notices, and SHA-256 checksums.
+The optional GUI is built locally; no prebuilt application is included.
+The existing [beta limitations](https://github.com/bearxiong2k/Mindflow/blob/v2026.11.6-r1/docs/gui.md#beta-limitations) still apply.
+
 ## [2026.11.6](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6) — Reader and Structuralist prerelease
 
 - Improves Reader typography with 15px body text, a bounded responsive prose

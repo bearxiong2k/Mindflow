@@ -1,140 +1,353 @@
-# Structuralist Recipe
+# A Working Guide to Project Documentation
 
-## One comparison, at any project phase
+This recipe records the maintainer's preferred documentation practice developed
+through work with Mindflow. It offers a coherent working default for keeping
+purpose, commitments, implementation, evidence, and developing questions
+understandable together.
 
-This recipe illustrates one project choosing work, learning from it, and
-absorbing its consequences with few files. The project's own maintained
-practice determines how it develops. The worked cycle is one local choice,
-not an adoption unit, document tree requirement, or project lifecycle.
-Use existing owners and names when they work. Consulting the recipe authorizes
-no mutation; inspect assets only when adapting or materializing them is part of
-the request.
+**Project-local design, terminology, and maintained instructions take priority
+over this guide.** Use its recommendations where the project leaves a choice,
+and adapt them deliberately when establishing or revising local practice.
+Keep adopted rules in the project's own guidance so they remain usable without
+Structuralist. Consulting the recipe does not authorize project changes.
 
-## Compact example
+Read the relevant part for the task:
 
-Fieldbook is a fictional project for reading field notes. The example captures
-one completed browsing-design cycle with a remaining comparison question. Its
-work and observations are illustrative, not evidence about a real application.
+- [The recipe at a glance](#the-recipe-at-a-glance)
+- [Organization and authority](#organization-and-authority)
+- [Change routing](#route-each-change)
+- [Development practice](#working-through-development)
+- [Writing for the reader](#writing-for-the-reader)
+- [Mindflow alignment](#using-mindflow)
+- [Maintenance and completion](#maintenance-and-completion)
+- [Fieldbook illustration](#fieldbook-in-practice)
+- [Asset adaptation](#adapting-the-assets)
 
-```text
-project.md                         current purpose, behavior, and working practice
-evidence/browsing-walkthrough.md    worked observation, conditions, and limits
-evolve/
-  browsing-question.md             an initially unresolved discussion
-  browsing-evidence.md             a later observation and remaining uncertainty
-  browsing-summary.md              synthesis linking the finer Events and owner
-MINDFLOW.yaml                      selected files, current Opening, Event grouping
-AGENTS.md                          concise reading and editing guidance
+## The recipe at a glance
+
+Here is one fuller documentation arrangement, shown as a Mindflow-style
+Structure view. The outer box is the project folder; entries are files or
+collapsed folders, and labeled arrows describe relationships between them.
+
+```mermaid
+flowchart TD
+    subgraph project["project/"]
+        direction TB
+        readme["README.md<br/>Project entrance"]
+        agents["AGENTS.md<br/>Agent entrance"]
+        documentation["DOCUMENTATION.md<br/>Local documentation rules"]
+        profiles["profiles/<br/>Purpose and design"]
+        canonical["canonical_docs/<br/>Current contracts"]
+        specs["specs/<br/>Exact specifications"]
+        source["src/<br/>Implementation"]
+        evidence["evidence/<br/>Observations and limits"]
+        steering["long_term_steering/<br/>Continuing directions"]
+        events["evolve/<br/>Discussions and summaries"]
+        deferred["deferred_questions/<br/>Protected open choices"]
+        work["work/<br/>Temporary coordination"]
+        maintenance["trim_manual/<br/>Reusable maintenance guidance"]
+    end
+
+    readme -->|introduces| profiles
+    agents -->|points to| documentation
+    documentation -->|governs authoring of| events
+    profiles -->|governs| canonical
+    canonical -->|refined in| specs
+    canonical -->|implemented by| source
+    evidence -->|informs| events
+    evidence -->|supports| steering
+    steering -->|tracks development of| canonical
+    events -->|records reasoning for| canonical
+    events -->|links protected choices in| deferred
+    work -->|supports work owned by| steering
+    maintenance -->|guides maintenance of| canonical
 ```
 
-### One completed cycle
+This is a suggested layout, with selected relationships. Project-local design
+and guidance take priority: combine, rename, or omit owners as needed, and keep
+tests and evidence beside their actual artifacts. A temporary work folder is
+useful only while it carries authorized work. The compact Fieldbook example
+below combines several of these responsibilities in `project.md`.
 
-The table describes this fictional history. It is not a sequence to apply to
-every task or a claim that development must begin with a discussion.
+## Organization and authority
 
-| What happened in Fieldbook | Where the result lives |
-| --- | --- |
-| The browsing question compared a recent-visits list with place grouping. The local task was to choose a default while preserving access to every note; a paper walkthrough was sufficient to begin | `browsing-question.md` retains the alternatives and starting assumptions |
-| Two paper layouts were walked through using the same four note cards. Returning to the latest visit favored recency; comparing conflicting observations still required reading both notes | `evidence/browsing-walkthrough.md` retains the inputs, procedure, observations, and limits; the temporary comparison worksheet is no longer needed |
-| The project accepted recent visits with a place filter. It also refined its working practice: judge the complete reading task and preservation of differences, rather than navigation effort alone | `project.md` owns the behavior and current local practice; the evidence does not claim implementation, measured usability, or performance |
-| The interpretation changed from choosing one organization for every purpose to distinguishing resumption from comparison | `browsing-evidence.md` explains that change; `browsing-summary.md` synthesizes it and links the current owner and finer Events |
-| The bounded default-view choice ended. Comparing visits remains open, with conflicting observations as a useful next test if that work is selected | The question stays in `browsing-evidence.md`; Opening explicitly selects it, without scheduling another task |
+Give each maintained commitment one current owner. Link to that owner from
+other perspectives, discussions, and instructions. Make the authority between
+owners explicit: a design principle guides a behavioral contract; an exact
+specification refines that contract; implementation realizes it; evidence can
+pressure any of them and prompt a deliberate revision.
 
-This completes the selected design work, including a changed local method and
-the removal of temporary coordination after its useful content is preserved.
-It does not claim a completed implementation or product. The evidence account
-keeps observations apart from the Event's interpretation and the owner's
-accepted behavior. No separate deferred-question register is needed yet.
+Keep the project's documentation rules at one ordinary owner, commonly
+`DOCUMENTATION.md` or a section of the project account. That owner explains
+responsibilities, authority, change routing, and maintenance obligations.
+Update it when those rules change. Keep present results, active plans, and
+historical accounts with the owners below. Let `README.md` orient the reader
+and `AGENTS.md` provide a concise working entrance with links to local guidance.
 
-The manifest registers the five maintained documents. Evolve selects the three
-discussions, with the summary naming the other two as ordered children. Current Opening
-explicitly selects the evidence discussion because it carries the remaining
-question. None of these Events claims an Opening-file transition.
+Use this separation of responsibilities:
 
-This demonstrates three independent choices: what to maintain, what to keep
-open now, and how to read the reasoning. One useful discussion would also be a
-valid starting point; the three Event files illustrate summarization, not
-to impose a minimum.
-
-### Adapt to the situation
-
-The transferable lesson is to connect work, evidence, interpretation, and
-project-owned consequences. The sequence and carriers remain local choices.
-Fieldbook could repair a broken filter directly against its accepted behavior,
-using focused checks without a new Event or steer. A later inquiry into what
-field researchers need could reopen its purpose and require different evidence.
-An operational project could organize around restoration and review instead.
-The responsible local guidance determines that practice and may itself be
-revised. None of these situations needs to imitate the paper walkthrough or
-complete every movement in its cycle.
-
-Use the [Event guidance](practice-realization.md#authoring-event-discussions-and-summaries)
-for authoring, grouping, optional transitions, and conservation during removal.
-Summarizing supplies a readable synthesis; folding preserves access to the
-children. It does not by itself eliminate duplicate authority.
-
-## Optional extensions
-
-Introduce a responsibility when the project needs it, and separate files only
-when their authority or change needs differ. These extensions can be combined,
-renamed, or left within an existing owner.
-
-| Pressure | Possible extension | What changes |
+| Responsibility | What it maintains | Relationship to the rest |
 | --- | --- | --- |
-| A continuing direction outlives individual discussions | `long_term_steering/` | Keep intent, present edge, and absorption destination; link Event reasoning |
-| A durable perspective needs independent review | `profiles/` | Explain its question, causal argument, and tradeoffs for the intended reader; move the commitment and leave a link |
-| Readable behavior needs its own change surface | `canonical_docs/` | Move the semantic contract and link its governing perspective; keep rationale in Events |
-| Mechanical detail interrupts that explanation | A subordinate specification | Separate exact schemas or procedures while preserving their governing contract |
-| Evidence needs independent maintenance or reuse | An evidence account | Preserve conditions, observations, checks, and claim limits beside their actual artifacts |
-| A consequential choice cannot safely be resolved yet | `deferred_questions/` | Give it a safe boundary and evidence-based revisit condition; link its discussion |
-| Repeated coordination makes ownership rules hard to find | `governance/Documentation.md` | Own local routing and authority once; keep `AGENTS.md` a concise entry |
-| A maintenance problem demonstrably recurs | `trim_manual/` | Preserve a reusable procedure, not current findings or a new product rule |
-| One active task needs temporary coordination | A project-local scaffold | Keep its purpose, accountable context, and disposal condition clear; follow local linking rules and absorb results before removal |
+| Purpose and design perspectives, often `profiles/` | The problem, design insights, principles, tradeoffs, and durable boundaries | Guide current commitments; distinct perspectives may examine the same subject |
+| Readable current contracts, often `canonical_docs/` | Accepted meaning and behavior, including inputs, outcomes, constraints, lifetime, and relevant failure | Own what implementations must satisfy; distinguish that commitment from current coverage |
+| Exact specifications, often `specs/` | Schemas, signatures, encodings, and procedures whose exact form matters for conformance | Refine one named current contract and remain subordinate to its meaning |
+| Implementation and direct checks | Realized behavior and the checks that exercise it | Demonstrate coverage and expose gaps against the applicable commitments |
+| Evidence accounts | Observations, conditions, reproduction, comparisons, and limits beside their actual artifacts | Support scoped conclusions and preserve counterevidence for reconsideration |
+| Continuing direction, often `long_term_steering/` | Intent, current understanding, the question worth pursuing, and where results belong | Select and interpret further work using project-owned methods; link commitments and evidence |
+| Event discussions and summaries | Questions, alternatives, changed understanding, decision reasons, and historical synthesis | Explain how the project arrived here and link accepted consequences to their current owners |
+| Protected deferred choices | An unresolved consequential choice, current safe boundary, and evidence for revisiting it | Preserve a deliberate open boundary until an authorized decision reaches its owner |
+| Temporary scaffolds | Active plans, checklists, and bounded working reviews for an accountable task | Coordinate work; release them when useful results have been absorbed |
+| Reusable maintenance guidance | A procedure learned from a recurring documentation pressure | Apply the project's rules to future occurrences; keep current findings with the current task |
 
-The worked steering extension continues Fieldbook's visit-comparison question.
-It adds one steering file and a truthful root relationship to `project.md`.
-In this example current Opening moves from the evidence discussion to steering;
-the earlier Events stay unchanged. This illustrates independent current focus,
-not a missing historical transition that must be filled in.
+These responsibilities can share a file. A small project account can carry
+purpose, accepted behavior, and working practice. Separate owners when their
+authority, readers, or change needs require independent maintenance. Use names
+that fit the project; the suggested paths are conventions, not folders to
+create in advance. Create a standing layer when an ongoing responsibility
+makes it worth maintaining. A useful development can deserve an Event without
+creating another documentation layer.
 
-The other rows are options, not empty folders to create in advance. A small
-project can keep purpose and behavior together in `project.md` indefinitely.
-A unique useful Event needs no recurring-pressure justification; adding a
-standing documentation layer deserves stronger justification.
+When owners disagree, identify the actual decision boundary. Reconcile an
+exact specification with its governing contract. A mismatch between behavior
+and commitment calls for an implementation correction or an authorized change
+to the commitment. Preserve live disagreement and uncertainty until that choice
+is made. Evidence supplies a reason to reconsider; existing behavior does not
+silently settle the intended design.
+
+*Fieldbook combines purpose, browsing behavior, and local methods in
+[one project account](../assets/recipe/compact/project.md). Its evidence and
+Event reasoning have separate owners because readers need to inspect them
+independently. It does not need the full set of suggested directories.*
+
+## Route each change
+
+Read the affected owner and its relevant dependencies before editing. Use the
+kind of change to decide which consequences must travel together:
+
+| Change | Working rule |
+| --- | --- |
+| Purpose, design principle, or accepted boundary | Retain the meaningful alternatives and reasons in a discussion; revise the governing account and affected contracts |
+| Meaning or observable behavior | Update the current contract and affected exact specifications, implementation, and checks; if design intentionally precedes realization, state the remaining coverage gap at its ordinary owner |
+| Exact representation with unchanged meaning | Update its specification, implementation, and checks; confirm that the readable contract remains accurate |
+| A defect within an established commitment | Repair the behavior and run relevant checks; correct documentation only where its account is wrong |
+| New observations or a revised claim | Keep conditions, results, and limits at the evidence owner; update affected conclusions and retain useful changed interpretation in an Event |
+| A developing question or continuing direction | Preserve the question and current basis for choosing work; give a protected unresolved choice its safe boundary and revisit condition |
+| A working method or documentation convention | Revise the local guidance that owns it; retain the reason for a consequential change where it can be revisited |
+| Explanation or navigation | Improve the owner and affected links; preserve its meaning and reader purpose |
+
+One change can touch several rows. Follow its consequences across those owners
+without copying the same rule into each. Routine repairs and editorial changes
+need no new Event, steer, or research campaign. A discussion is useful when its
+reasoning will help a later reader understand a question or decision.
+
+*In Fieldbook, the browsing choice changed accepted behavior in `project.md`.
+The observation stayed in its evidence account, and the Events explain the
+choice. Changing only the summary would have left the maintained behavior
+without its accepted consequence.*
+
+## Working through development
+
+Start from the actual request and the project's current practice. Establish
+what needs to change, which commitments constrain it, and what outcome or
+stopping condition would answer the task. When selecting further work for a
+continuing direction, compare the relevant alternatives in that direction;
+finishing one task does not automatically select its adjacent next task.
+
+Choose methods for the question. Exploration can clarify what to ask;
+construction can realize a missing behavior; repair can restore an established
+contract; operations can require restoration followed by review. These are
+situations with different needs, not project phases. The project maintains
+and revises the methods it uses in its own ordinary documents.
+
+Separate the basis for beginning work from the evidence for claiming a result.
+An implementation task needs sufficiently clear intended behavior and checks
+at the affected boundary; it can supply the missing implementation. A claim of
+benefit or generality needs evidence for that claim. Keep accepted requirements,
+realized behavior, observations, and broader conclusions distinguishable.
+
+Do the work needed for a meaningful outcome, following consequences across
+owners. Keep temporary coordination tied to its accountable task, with a clear
+purpose, next action, and disposal condition. Link it from continuing direction
+when that direction owns the work; a one-time task can have a different local
+owner. A new test or intermediate implementation step need not create another
+campaign or document family.
+
+Interpret results at their demonstrated scope. Preserve the conditions,
+method, limitations, and useful counterevidence with the observation. A passing
+check establishes what it checks; a local improvement may leave the larger
+outcome unchanged. A loss, tie, or failed assumption can refine the question.
+Retain that learning and revise the affected commitments or local methods when
+an authorized decision follows.
+
+Finish by carrying the consequences to their owners and keeping any remaining
+question intelligible. Work can end with a repair, a clarified uncertainty, a
+changed approach, or no structural change. A complete task grants no authority
+for further work. These movements can be combined, revisited, or omitted under
+the project's chosen methods.
+
+## Writing for the reader
+
+Give each document a clear reader and question. Lead with the problem and the
+reasoning needed to understand its consequences. Introduce project terminology
+as it becomes useful, and keep technical precision at the level the reader
+needs to judge or act.
+
+- **Design perspectives:** explain the underlying problem, causal argument,
+  capabilities, tradeoffs, and limits. Intentional overlap between perspectives
+  is useful when their questions differ and shared commitments have clear owners.
+- **Current contracts:** make meaning and behavior readable without requiring
+  the reader to reconstruct internal workflow. Keep a precise sentence, table,
+  or example when it explains the contract directly. Move mechanical inventories
+  and exact procedures to a specification when they interrupt that explanation.
+- **Evidence:** state the question, inputs, procedure, observations, and claim
+  limits alongside the actual records. Use existing tests, research, or
+  operational evidence owners rather than copying results into a second account.
+- **Continuing direction:** make intent, present understanding, the current
+  question, stopping conditions, and absorption destinations easy to find.
+  Link evidence and retained reasoning; move active task detail into temporary
+  coordination when it needs a separate working surface.
+- **Events:** retain the question, meaningful alternatives, uncertainty, and
+  how understanding changed. A summary explains what a group means and links
+  its finer reasoning and current consequences. It can preserve an open question.
+- **Local documentation guidance:** state durable ownership, routing, and
+  maintenance rules. Put current inventories and developments at their ordinary
+  owners so routine progress does not require rewriting the guide.
+
+Accuracy alone does not make a document effective for its reader. Check that
+someone unfamiliar with the internal history can follow its argument and find
+its consequences. Preserve necessary explanation when replacing duplication
+with links. Brevity is useful when it improves that reading experience.
+
+## Using Mindflow
+
+Maintain the documentation arrangement in ordinary project files. Use Mindflow
+to make the selected account navigable:
+
+- **Structure** selects the entries worth maintaining together and exposes
+  their real hierarchy and meaningful relationships. Use prose links for exact
+  connections that cannot be truthfully expressed at a folder scope.
+- **Opening** explicitly selects current concerns. Choose the documents that
+  actually carry those concerns; a discussion or project account can serve this
+  role as well as a continuing steer. Activity does not select them implicitly.
+- **Evolve** makes useful discussions and authored summaries revisitable. Link
+  accepted consequences to current owners and preserve finer reasoning beneath
+  summaries. Record file transitions only when they occurred.
+
+Keep work selection, methods, and execution in the project's guidance and
+ordinary tools. Generated views and personal folding state carry no authority.
+Folding a summary improves reading but does not reconcile competing commitments.
+Use [practice-realization.md](practice-realization.md) for exact operations,
+Event authoring, historical evidence, and navigation checks.
+
+## Maintenance and completion
+
+Review documentation when a meaningful change exposes drift or readers can no
+longer find the governing account. Classify the material by its responsibility
+before moving or removing it. Clarify false distinctions; separate genuinely
+independent responsibilities; reconnect their authority, evidence, and
+realization links. Size, age, and file count can prompt inspection but cannot
+decide a split or trim.
+
+Absorb useful results before removing temporary coordination or superseded
+material. Preserve unique obligations, alternatives, evidence, uncertainty,
+and reasons for changed views at their proper owners. Repair incoming links
+and relevant registrations. Git retains earlier bytes; current readers still
+need an intelligible account. Distill a recurring maintenance method into a
+reusable guide only when experience justifies maintaining it.
+
+At completion, check the affected scope:
+
+1. Each accepted meaning has a current owner, and affected principles,
+   contracts, exact specifications, and implementation accounts agree.
+2. Relevant checks support the reported behavior; incomplete realization and
+   the limits of evidence remain explicit. Broaden testing only for a changed
+   obligation, failure, or unresolved concern.
+3. Useful reasoning and protected uncertainty remain reachable, and continuing
+   direction or current focus reflects any accepted change.
+4. Temporary coordination has been absorbed and removed with its obsolete
+   links, or remains explicitly active for work that is still authorized.
+5. Prose links, affected Mindflow views when present, and the complete diff
+   preserve the intended meaning. Use the
+   [navigation review](practice-realization.md#checking-navigable-relationships)
+   after changing Structure.
+
+## Fieldbook in practice
+
+Fieldbook is a fictional project for reading field notes. Its compact example
+illustrates this guide through one completed browsing-design task. The worked
+observations are illustrative, not evidence about a real application.
+
+```text
+project.md                         purpose, behavior, local methods, ownership
+AGENTS.md                          concise working entrance
+evidence/browsing-walkthrough.md   observation, conditions, and limits
+evolve/browsing-question.md        initial question and alternatives
+evolve/browsing-evidence.md        interpretation and remaining uncertainty
+evolve/browsing-summary.md         synthesis linking finer Events and owners
+MINDFLOW.yaml                      selected entries, Opening, Event grouping
+```
+
+| Development | Maintained consequence |
+| --- | --- |
+| Compare a recent-visits list with place grouping to choose a default while preserving access to every note | The initial discussion retains the alternatives, starting assumptions, and bounded question |
+| Walk two paper layouts through the same four note cards | The evidence account keeps inputs, procedure, observations, and limits after the temporary worksheet has served its purpose |
+| Recognize that recency helps resumption while grouping alone does not explain conflicting observations | The later Event retains the changed interpretation; the summary relates the finer reasoning |
+| Accept recent visits with a place filter and judge whole reading tasks rather than navigation effort alone | `project.md` owns the accepted behavior and revised local working practice |
+| Finish the default-view design choice while comparison remains unresolved | The question remains in the later discussion, which Opening explicitly selects without scheduling another task |
+
+The example completes a design task without claiming a working implementation,
+measured usability, or a finished product. It combines purpose, behavior, and
+local guidance in one account instead of creating separate profile, contract,
+and documentation-policy files. Its three Events demonstrate summary grouping;
+none claims an Opening-file transition. The manifest registers five maintained
+documents, independently selecting current focus and the reading of history.
+
+The same arrangement supports different later work:
+
+| Later situation | How Fieldbook would apply the guide |
+| --- | --- |
+| An implemented filter omits a matching note | Repair implementation against the accepted behavior and verify the relevant case; retain the existing design and use its current owners |
+| New observations challenge the browsing assumption | Keep their actual conditions and limits; reconsider the assumption in a discussion and update accepted behavior only when the decision changes |
+| Researchers question Fieldbook's purpose | Reopen the project account and develop the alternatives with appropriate evidence; preserve unchosen directions and uncertainty |
+
+These are illustrative possibilities, not additional history in the assets.
+Fieldbook's current paper walkthrough is a local method for its browsing
+question. Its own guidance permits other methods for these other situations.
+
+The supplied steering extension shows a concrete separation when a comparison
+question needs continuing direction. One file carries intent, present account,
+current edge, and absorption destination, linking the existing evidence and
+Events. A truthful root relationship connects that direction to the project
+account. Current Opening moves to steering; earlier Events stay unchanged.
+Further separations follow the responsibility and reader tests above, rather
+than adding a folder for each completed task.
 
 ## Adapting the assets
 
-The assets are a complete fictional worked example, not a placeholder template
-or a record of the target project's past:
+The assets contain the fictional illustration, not a ready-made account of a
+target project's past:
 
-- `assets/recipe/compact/` is the independently valid example.
-- `assets/recipe/extensions/steering/` contains one optional file plus
-  `manifest-additions.yaml`, an illustrative fragment, not a loadable manifest.
-  Its document path is relative to the target root.
+- `assets/recipe/compact/` is independently valid.
+- `assets/recipe/extensions/steering/` supplies one optional file and a
+  `manifest-additions.yaml` fragment, whose document path is relative to the
+  target root. The fragment is not a loadable manifest.
 
-Copy neither directory wholesale into an existing project. First map the
-example's responsibilities to existing owners and inspect every proposed
-destination. Reuse existing discussions in place where possible. Replace the
-fictional purpose, evidence, decisions, and current question with supported
-local meaning; omit any Event the target does not need. Never manufacture
-history or a decision merely to fill the example.
+For authorized project adoption, map the guide's responsibilities to existing
+owners, agree any local adaptations, and maintain the resulting guidance in
+the project. Use only asset content that helps that work. Inspect destinations,
+replace fictional purpose and observations with supported local meaning, and
+reuse discussions in place. Never manufacture evidence or history to fill the
+example. Keep existing stable IDs and reconcile paths, links, relationships,
+Event references, and the explicitly chosen Opening together.
 
 For an isolated demonstration, copy only `compact/` to an empty target and
-initialize Git there. For the optional extension, place its steering file at
-the matching relative path, merge the fragment's components and relationship
-definitions, and append its relationship. Explicitly choose current Opening:
-the worked extension replaces the compact selection with the fragment's list.
-Do not replace a real project's whole manifest or infer this selection for it.
+initialize Git there. To demonstrate the extension, add its steering file at
+the matching relative path, merge its components and relationship definitions,
+and append its relationship. The worked extension replaces Opening with the
+fragment's selection; choose current focus explicitly in a real project.
 
-For real adoption, preserve stable IDs for existing entries and reconcile paths,
-links, relationships, Event references, and Opening with the chosen meaning.
-Register only what the project intends to maintain. Relationships obey actual
-folder locality; finer cross-folder claims remain ordinary prose links.
-Keep the result understandable without Structuralist installed.
-
-Require a format `2026-10-27` executable. Validate the complete adapted Region,
-Opening and Evolve views, follow the
-[navigation review](practice-realization.md#checking-navigable-relationships),
-and review exact prose and the diff. Mermaid may be generated afterward; it is
-never a second authored carrier. Earlier formats require a separately reviewed
-manual adoption.
+Validate the adapted Region and affected views using format `2026-10-27`,
+follow the [navigation review](practice-realization.md#checking-navigable-relationships),
+and review the exact prose and diff. Mindflow Structure maps are generated
+output. Earlier formats require separately reviewed manual adoption. The
+resulting project must remain understandable without Structuralist installed.

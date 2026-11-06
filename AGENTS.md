@@ -33,8 +33,9 @@ and optional Opening transitions in the manifest. Follow
 files. Do not invent Event records from every edit or commit.
 
 Follow the target project's maintained working practice for methods, evidence,
-and stopping conditions. Adapt the optional Structuralist recipe to that
-situation; its worked cycle and document tree are examples. Installation, skill
+and stopping conditions. The Structuralist recipe supplies working documentation
+defaults; project-local design and guidance take priority. Keep adopted rules
+at their local owner, and use its example only where useful. Installation, skill
 invocation, and project adoption are separate actions.
 Report the exact executable, release, format, skill directory, project root,
 and validation result when handing setup back to the user.

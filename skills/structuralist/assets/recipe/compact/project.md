@@ -28,3 +28,18 @@ repaired against the accepted behavior; reconsidering field researchers' needs
 can reopen the purpose and require other evidence. Revise this account when
 the project's practice changes. No continuing steer or Event is required for
 an ordinary repair.
+
+## Documentation ownership
+
+Keep purpose, accepted behavior, and working methods together in this account;
+they are still small enough to review together. Use the existing evidence
+account for the walkthrough's observations and limits, and Event discussions
+for its alternatives and interpretation. Summaries explain the reasoning and
+link accepted consequences here.
+
+A behavior change updates this account and the affected realization and checks.
+A new observation updates its evidence owner; revise this account when its
+accepted conclusion or working method changes. Keep active worksheets temporary
+and absorb useful results before removing them. Separate a responsibility only
+when it needs independent maintenance. This local arrangement governs Fieldbook
+when a general recipe suggests a different layout or method.
