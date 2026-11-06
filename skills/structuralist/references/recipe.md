@@ -2,20 +2,23 @@
 
 ## One comparison, at any project phase
 
-This recipe illustrates developing reasoning, accepted meaning, and current
-focus with few files. It is a comparison, not an adoption unit, document tree
-requirement, or project lifecycle. Use existing owners and names when they work.
-Consulting the recipe authorizes no mutation; inspect assets only when adapting
-or materializing them is part of the request.
+This recipe illustrates one project choosing work, learning from it, and
+absorbing its consequences with few files. The project's own maintained
+practice determines how it develops. The worked cycle is one local choice,
+not an adoption unit, document tree requirement, or project lifecycle.
+Use existing owners and names when they work. Consulting the recipe authorizes
+no mutation; inspect assets only when adapting or materializing them is part of
+the request.
 
 ## Compact example
 
-Fieldbook is a fictional project for reading field notes. Its example begins
-during a browsing-design discussion, without claiming to reconstruct the
-project's beginning.
+Fieldbook is a fictional project for reading field notes. The example captures
+one completed browsing-design cycle with a remaining comparison question. Its
+work and observations are illustrative, not evidence about a real application.
 
 ```text
-project.md                         current purpose and accepted behavior
+project.md                         current purpose, behavior, and working practice
+evidence/browsing-walkthrough.md    worked observation, conditions, and limits
 evolve/
   browsing-question.md             an initially unresolved discussion
   browsing-evidence.md             a later observation and remaining uncertainty
@@ -24,22 +27,46 @@ MINDFLOW.yaml                      selected files, current Opening, Event groupi
 AGENTS.md                          concise reading and editing guidance
 ```
 
-In the question, recent visits and place grouping are plausible alternatives.
-The later evidence changes the choice without settling how to compare visits.
-The summary explains why recent visits became the default and why place
-grouping remains useful. Accepted browsing behavior lives in `project.md`;
-the remaining comparison question stays in the evidence discussion. No
-separate deferred-question register is needed yet.
+### One completed cycle
 
-The manifest registers all four documents. Evolve selects the three discussions,
-with the summary naming the other two as ordered children. Current Opening
+The table describes this fictional history. It is not a sequence to apply to
+every task or a claim that development must begin with a discussion.
+
+| What happened in Fieldbook | Where the result lives |
+| --- | --- |
+| The browsing question compared a recent-visits list with place grouping. The local task was to choose a default while preserving access to every note; a paper walkthrough was sufficient to begin | `browsing-question.md` retains the alternatives and starting assumptions |
+| Two paper layouts were walked through using the same four note cards. Returning to the latest visit favored recency; comparing conflicting observations still required reading both notes | `evidence/browsing-walkthrough.md` retains the inputs, procedure, observations, and limits; the temporary comparison worksheet is no longer needed |
+| The project accepted recent visits with a place filter. It also refined its working practice: judge the complete reading task and preservation of differences, rather than navigation effort alone | `project.md` owns the behavior and current local practice; the evidence does not claim implementation, measured usability, or performance |
+| The interpretation changed from choosing one organization for every purpose to distinguishing resumption from comparison | `browsing-evidence.md` explains that change; `browsing-summary.md` synthesizes it and links the current owner and finer Events |
+| The bounded default-view choice ended. Comparing visits remains open, with conflicting observations as a useful next test if that work is selected | The question stays in `browsing-evidence.md`; Opening explicitly selects it, without scheduling another task |
+
+This completes the selected design work, including a changed local method and
+the removal of temporary coordination after its useful content is preserved.
+It does not claim a completed implementation or product. The evidence account
+keeps observations apart from the Event's interpretation and the owner's
+accepted behavior. No separate deferred-question register is needed yet.
+
+The manifest registers the five maintained documents. Evolve selects the three
+discussions, with the summary naming the other two as ordered children. Current Opening
 explicitly selects the evidence discussion because it carries the remaining
 question. None of these Events claims an Opening-file transition.
 
 This demonstrates three independent choices: what to maintain, what to keep
 open now, and how to read the reasoning. One useful discussion would also be a
-valid starting point; the three-file example exists to show summarization, not
+valid starting point; the three Event files illustrate summarization, not
 to impose a minimum.
+
+### Adapt to the situation
+
+The transferable lesson is to connect work, evidence, interpretation, and
+project-owned consequences. The sequence and carriers remain local choices.
+Fieldbook could repair a broken filter directly against its accepted behavior,
+using focused checks without a new Event or steer. A later inquiry into what
+field researchers need could reopen its purpose and require different evidence.
+An operational project could organize around restoration and review instead.
+The responsible local guidance determines that practice and may itself be
+revised. None of these situations needs to imitate the paper walkthrough or
+complete every movement in its cycle.
 
 Use the [Event guidance](practice-realization.md#authoring-event-discussions-and-summaries)
 for authoring, grouping, optional transitions, and conservation during removal.
@@ -55,12 +82,14 @@ renamed, or left within an existing owner.
 | Pressure | Possible extension | What changes |
 | --- | --- | --- |
 | A continuing direction outlives individual discussions | `long_term_steering/` | Keep intent, present edge, and absorption destination; link Event reasoning |
-| A durable perspective needs independent review | `profiles/` | Move the relevant purpose or design commitment from its current owner and leave a link |
-| Exact implementation behavior needs its own change surface | `canonical_docs/` | Move the contract and link its governing perspective; keep rationale in Events |
+| A durable perspective needs independent review | `profiles/` | Explain its question, causal argument, and tradeoffs for the intended reader; move the commitment and leave a link |
+| Readable behavior needs its own change surface | `canonical_docs/` | Move the semantic contract and link its governing perspective; keep rationale in Events |
+| Mechanical detail interrupts that explanation | A subordinate specification | Separate exact schemas or procedures while preserving their governing contract |
+| Evidence needs independent maintenance or reuse | An evidence account | Preserve conditions, observations, checks, and claim limits beside their actual artifacts |
 | A consequential choice cannot safely be resolved yet | `deferred_questions/` | Give it a safe boundary and evidence-based revisit condition; link its discussion |
 | Repeated coordination makes ownership rules hard to find | `governance/Documentation.md` | Own local routing and authority once; keep `AGENTS.md` a concise entry |
 | A maintenance problem demonstrably recurs | `trim_manual/` | Preserve a reusable procedure, not current findings or a new product rule |
-| One active investigation needs temporary coordination | A project-local scaffold | Keep it unregistered under a steering owner with reciprocal links; absorb results and delete both links with it |
+| One active task needs temporary coordination | A project-local scaffold | Keep its purpose, accountable context, and disposal condition clear; follow local linking rules and absorb results before removal |
 
 The worked steering extension continues Fieldbook's visit-comparison question.
 It adds one steering file and a truthful root relationship to `project.md`.

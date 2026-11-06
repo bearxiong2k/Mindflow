@@ -55,8 +55,16 @@ Markdown links to continue reading. Images, Mermaid, and mathematical notation
 are rendered where supported; their presentation does not replace source files.
 Each Reader uses its owning workspace's observation. Refreshing or closing a
 different workspace on the same project does not replace that observation.
-Names and prose wrap at natural boundaries; code blocks preserve their lines
-and scroll when needed.
+Reader uses 15px body text and a bounded prose column that adapts to window
+width. Supported platforms improve paragraph wrapping, balance short headings,
+and add spacing in mixed ideographic/Latin prose. Paragraphs retain natural
+left alignment. Code blocks preserve their lines; wide code, tables, and
+formulas can use more space than prose and scroll when needed.
+
+Links and relationship entries targeting folders in the captured Structure
+return to that folder in the owning workspace and project tab. Empty folders
+are revealed in their parent view. The Reader keeps its document and scroll
+position so reading can continue afterward.
 
 **Region** inspects the validated account, including its counts, relationships,
 Opening, Events, and Anchors. It is another view of the project rather than a

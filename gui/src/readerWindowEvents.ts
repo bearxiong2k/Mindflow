@@ -9,6 +9,8 @@ const readerInspectionEvent = "mindflow-reader-inspection";
 export interface ReaderNavigationEvent {
   root: string;
   path: string;
+  kind?: "document" | "directory";
+  snapshot?: string;
 }
 
 export interface ReaderInspectionEvent {

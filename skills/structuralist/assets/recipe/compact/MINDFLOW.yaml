@@ -6,6 +6,8 @@ components:
     path: "."
   project_account:
     path: project.md
+  browsing_walkthrough:
+    path: evidence/browsing-walkthrough.md
   browsing_question:
     path: evolve/browsing-question.md
   browsing_evidence:

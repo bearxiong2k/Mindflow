@@ -737,7 +737,7 @@ export function resolveProjectHref(
     }
   }
   const candidate = parts.join("/");
-  return candidate || undefined;
+  return candidate || ".";
 }
 
 export function readerLinkDestination(

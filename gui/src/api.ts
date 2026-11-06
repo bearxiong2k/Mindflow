@@ -162,6 +162,10 @@ export function loadReaderWindow(): Promise<ReaderWindowSnapshot> {
   return invoke<ReaderWindowSnapshot>("reader_window_snapshot");
 }
 
+export function navigateReaderFolder(path: string): Promise<void> {
+  return invoke<void>("navigate_reader_folder", { path });
+}
+
 export function loadReaderImage(path: string): Promise<string> {
   return invoke<string>("reader_image_data_url", { path });
 }

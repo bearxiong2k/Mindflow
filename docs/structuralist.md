@@ -11,7 +11,7 @@ Core, CLI, and GUI work without it.
 
 ## Install the complete package
 
-The [2026.10.29 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.29) includes the complete package
+The [2026.11.6 prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6) includes the complete package
 in its source and offers a separate skill archive:
 
 ```text
@@ -48,7 +48,7 @@ pass the exact destination to the installer:
 ./distribution/install-structuralist.sh /path/to/agent/skills/structuralist
 ```
 
-For the separate skill archive, extract it and enter `structuralist-2026.10.29/`.
+For the separate skill archive, extract it and enter `structuralist-2026.11.6/`.
 Run the same `./distribution/install-structuralist.sh` and `--check` commands
 there. The archive includes its installer and license notices. For manual
 installation, copy its complete `skills/structuralist/` directory into your
@@ -88,12 +88,25 @@ accepted commitments stay with current owners. Folding retains access to
 reasoning. Consolidating or removing it requires preserving meaningful evidence
 and uncertainty, not merely hiding detail.
 
+The project's maintained guidance determines goals, methods, evidence, and
+stopping conditions. Structuralist helps an agent follow and, when requested,
+revise that practice. A repair, exploratory inquiry, or operational problem can
+use different methods and need no new Event, continuing steer, or scaffold.
+
 The [recipe](../skills/structuralist/references/recipe.md) offers a
 [compact worked example](../skills/structuralist/assets/recipe/compact/project.md)
-with two discussions and a summary. Its optional steering extension shows how
-a continuing concern can move into current Opening without changing Event
-history. Profiles, contracts, governance, deferred choices, and maintenance
-procedures are further options when a project needs those responsibilities.
+covering one complete bounded design cycle: a question, a paper walkthrough,
+changed understanding, accepted behavior and revised local practice, a summary,
+and remaining uncertainty. Its separate evidence account preserves observations
+and limits; Events interpret them and link consequences to their current owners.
+This fictional design exercise does not claim a working implementation or
+measured user outcomes. Its sequence is an example to adapt to the project's
+situation.
+
+The optional steering extension shows how a continuing concern can move into
+current Opening without changing Event history. Profiles, readable contracts,
+exact specifications, governance, deferred choices, and maintenance procedures
+are further options when a project needs those responsibilities.
 
 Use existing owners before adding files. These are fictional examples to adapt,
 not history to copy into a project. A small project may need only a few selected

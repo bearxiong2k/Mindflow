@@ -32,8 +32,10 @@ and optional Opening transitions in the manifest. Follow
 [Project format](docs/project-format.md); current Opening remains independent of that recorded flow. The GUI reads these
 files. Do not invent Event records from every edit or commit.
 
-Do not copy the optional Structuralist recipe's document tree by default.
-Installation, skill invocation, and project adoption are separate actions.
+Follow the target project's maintained working practice for methods, evidence,
+and stopping conditions. Adapt the optional Structuralist recipe to that
+situation; its worked cycle and document tree are examples. Installation, skill
+invocation, and project adoption are separate actions.
 Report the exact executable, release, format, skill directory, project root,
 and validation result when handing setup back to the user.
 

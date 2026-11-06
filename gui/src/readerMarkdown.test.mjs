@@ -101,6 +101,10 @@ test("native Reader target keeps its development identity and approved-image sch
 });
 
 test("Reader resolves project links for navigation and address preview", () => {
+  for (const href of ["../", "/", "..#overview"]) {
+    assert.equal(readerLinkDestination("guide/overview.md", href).projectPath, ".");
+  }
+  assert.equal(readerLinkDestination("guide/overview.md", "../docs/").projectPath, "docs");
   assert.deepEqual(
     readerLinkDestination(
       "guide/overview.md",

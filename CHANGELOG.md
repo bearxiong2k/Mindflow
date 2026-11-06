@@ -4,6 +4,30 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 private laboratory; this repository receives reviewed source releases.
 
+## [2026.11.6](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6) — Reader and Structuralist prerelease
+
+- Improves Reader typography with 15px body text, a bounded responsive prose
+  column, supported native paragraph and heading wrapping, and mixed-script
+  spacing. Wide technical blocks retain their own space; code whitespace and
+  natural left alignment are preserved.
+- Opens Reader folder links and folder relationship entries in the owning
+  workspace's Structure view and project tab. Empty folders are revealed in
+  their parent; the Reader retains its current document and scroll position.
+- Strengthens Structuralist's practice guidance while keeping all five patterns.
+  Each project's maintained instructions govern its methods, evidence, and
+  stopping conditions, including when its situation or development phase changes.
+- Extends the compact recipe with a complete fictional design cycle, a separate
+  evidence account with explicit limits, revised local practice, Event reasoning,
+  and remaining uncertainty. The cycle is adaptable; ordinary repairs need no
+  new Event, steer, or scaffold.
+- Keeps project format `2026-10-27`. Updating the app or skill requires no
+  structural conversion for projects already using this format and does not
+  automatically change their recorded adoption.
+
+Includes source and standalone Structuralist archives with SHA-256 checksums.
+The optional macOS GUI is built locally; no prebuilt application is included.
+The existing [beta limitations](https://github.com/bearxiong2k/Mindflow/blob/v2026.11.6/docs/gui.md#beta-limitations) still apply.
+
 ## [2026.10.29](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.10.29) — Navigation and Structuralist prerelease
 
 - Gives Structure, Opening, and Evolve distinct labeled icon buttons. Structure

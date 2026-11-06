@@ -1,5 +1,5 @@
 import { documentDirectory, documentRelationships } from "./types.ts";
-import { projectMapFor, projectMapOpeningFocus } from "./projectMapNavigation.ts";
+import { projectMapFor, projectMapFolderFocus, projectMapOpeningFocus } from "./projectMapNavigation.ts";
 import { HelpOnly } from "./components/InterfaceHelp";
 import {
   forwardRef,
@@ -507,6 +507,7 @@ function errorMessage(error: unknown): string {
 
 interface RegionWorkspaceProps {
   tabId: string;
+  onActivate: (tabId: string) => void;
   initialRegion: RegionResponse;
   openError?: string;
   openErrorVersion?: number;
@@ -524,6 +525,7 @@ const RegionWorkspace = forwardRef<
   RegionWorkspaceProps
 >(function RegionWorkspace({
   tabId,
+  onActivate,
   initialRegion,
   openError,
   openErrorVersion,
@@ -772,6 +774,22 @@ const RegionWorkspace = forwardRef<
     void listenForWorkspaceReaderEvents(
       (event) => {
         if (event.root !== region.root) return;
+        if (event.kind === "directory") {
+          const target = event.snapshot === snapshotId
+            ? projectMapFolderFocus(projectMapFor(graph), event.path) : undefined;
+          if (!target) {
+            setRegionError("The linked folder is unavailable in this workspace snapshot. Refresh the project and try again.");
+            return;
+          }
+          onActivate(tabId);
+          setTimelineOpen(false);
+          setQcOpen(false);
+          setRegionOverviewOpen(false);
+          setNavigationHover(undefined);
+          setHoveredInspection(undefined);
+          setMapNavigationRequest(current => ({ ...target, revision: (current?.revision ?? 0) + 1 }));
+          return;
+        }
         setPresentationPreferences((current) => {
           const expandedPaths = new Set(current.files.expandedPaths);
           for (const path of expandedParentPaths(event.path)) {
@@ -813,7 +831,7 @@ const RegionWorkspace = forwardRef<
       disposed = true;
       unlisten?.();
     };
-  }, [handleInspect, region.graph.documents, region.root]);
+  }, [graph, handleInspect, onActivate, region.root, snapshotId, tabId]);
 
   const selectDocument = useCallback(
     (path: string, mode: ReaderNavigationMode = "same-reader") => {
@@ -1182,6 +1200,9 @@ export default function App() {
   >(() => new Map());
   const openRequestQueueRef = useRef<Promise<void>>(Promise.resolve());
   const activeWorkspaceRef = useRef<WorkspaceHandle>(null);
+  const activateTab = useCallback((activeId: string) => {
+    setTabState(current => current.activeId === activeId ? current : { ...current, activeId });
+  }, []);
 
   useEffect(() => {
     const activeTab = tabState.tabs.find(
@@ -1465,9 +1486,7 @@ export default function App() {
           tabState.activeId !== undefined &&
           refreshingTabIds.has(tabState.activeId)
         }
-        onActivate={(activeId) =>
-          setTabState((current) => ({ ...current, activeId }))
-        }
+        onActivate={activateTab}
         onClose={closeTab}
         onOpen={openRegion}
         onOpenSsh={showSshDialog}
@@ -1503,6 +1522,7 @@ export default function App() {
                         : undefined
                     }
                     tabId={tab.id}
+                    onActivate={activateTab}
                     initialRegion={tab.region}
                     openError={tab.openError}
                     openErrorVersion={tab.openErrorVersion}

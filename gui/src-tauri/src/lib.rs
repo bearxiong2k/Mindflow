@@ -67,6 +67,16 @@ enum ReaderInspectionTarget {
 struct ReaderNavigationEvent {
     root: String,
     path: String,
+    kind: ReaderNavigationKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snapshot: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum ReaderNavigationKind {
+    Document,
+    Directory,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -946,6 +956,8 @@ fn emit_reader_navigation(
             ReaderNavigationEvent {
                 root: root.to_owned(),
                 path: path.to_owned(),
+                kind: ReaderNavigationKind::Document,
+                snapshot: None,
             },
         )
         .map_err(|error| format!("cannot synchronize Reader navigation: {error}"))
@@ -1183,6 +1195,44 @@ async fn present_reader_window(
         present_started.elapsed().as_millis()
     ));
     Ok(label)
+}
+
+fn reader_folder_navigation(
+    controller: &DesktopController,
+    reader_label: &str,
+    path: String,
+) -> Result<(String, ReaderNavigationEvent), String> {
+    let session = controller
+        .reader_session(reader_label)?
+        .ok_or_else(|| format!("Mindflow window '{reader_label}' is not a Reader"))?;
+    // This is a presentation request against the owner's retained Structure.
+    // The workspace resolves the exact folder and snapshot before navigating.
+    Ok((
+        session.owner_window,
+        ReaderNavigationEvent {
+            root: session.root,
+            path,
+            kind: ReaderNavigationKind::Directory,
+            snapshot: session.snapshot,
+        },
+    ))
+}
+
+#[tauri::command]
+fn navigate_reader_folder(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    controller: tauri::State<'_, DesktopController>,
+    path: String,
+) -> Result<(), String> {
+    let (owner_window, navigation) = reader_folder_navigation(&controller, window.label(), path)?;
+    let owner = app
+        .get_webview_window(&owner_window)
+        .ok_or_else(|| format!("Mindflow workspace '{owner_window}' is unavailable"))?;
+    owner
+        .emit(READER_NAVIGATION_EVENT, navigation)
+        .map_err(|error| format!("cannot navigate to Reader folder: {error}"))?;
+    activate_window(&app, &owner_window)
 }
 
 #[tauri::command]
@@ -1805,6 +1855,7 @@ pub fn run() {
             take_pending_open_regions,
             create_project_window,
             present_reader_window,
+            navigate_reader_folder,
             reader_window_snapshot,
             reader_image_data_url,
             inspect_reader_target,
@@ -1847,6 +1898,38 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folder_navigation_returns_to_the_reader_owner_without_replacing_its_document() {
+        let controller = DesktopController::with_main(OpenBatch::Requested(Vec::new()));
+        controller
+            .register_window("peer".to_owned(), OpenBatch::Requested(Vec::new()))
+            .unwrap();
+        let session = ReaderWindowSession {
+            owner_window: "peer".to_owned(),
+            root: "/project".to_owned(),
+            snapshot: Some("sha256:retained".to_owned()),
+            path: "docs/intro.md".to_owned(),
+            fragment: Some("reading-position".to_owned()),
+            interface_scale: 1.0,
+        };
+        controller
+            .register_reader("reader-owned".to_owned(), session)
+            .unwrap();
+        let (owner, event) =
+            reader_folder_navigation(&controller, "reader-owned", "docs".to_owned()).unwrap();
+        assert_eq!(owner, "peer");
+        assert_eq!(event.root, "/project");
+        assert_eq!(event.path, "docs");
+        assert_eq!(event.snapshot.as_deref(), Some("sha256:retained"));
+        assert_eq!(event.kind, ReaderNavigationKind::Directory);
+        let unchanged = controller.reader_session("reader-owned").unwrap().unwrap();
+        assert_eq!(unchanged.path, "docs/intro.md");
+        assert_eq!(unchanged.fragment.as_deref(), Some("reading-position"));
+        assert!(reader_folder_navigation(&controller, "peer", "docs".to_owned()).is_err());
+        controller.remove_window("peer").unwrap();
+        assert!(reader_folder_navigation(&controller, "reader-owned", "docs".to_owned()).is_err());
+    }
 
     fn temporary_region(name: &str) -> PathBuf {
         let unique = SystemTime::now()

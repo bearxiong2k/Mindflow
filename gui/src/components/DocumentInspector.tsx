@@ -44,7 +44,7 @@ import type {
   ManagedDocument,
 } from "../types";
 import { externalTargetLabel, isExternalTarget } from "../types";
-import { ArrowIcon, FileIcon } from "./Icons";
+import { ArrowIcon, FileIcon, FolderIcon } from "./Icons";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { HelpToggle } from "./InterfaceHelp";
 
@@ -87,6 +87,7 @@ interface DisplayRelationship {
   path?: string;
   label: string;
   incoming: boolean;
+  directory: boolean;
 }
 
 interface MarkdownNavigation {
@@ -765,14 +766,21 @@ export const DocumentInspector = memo(function DocumentInspector({
 }: DocumentInspectorProps) {
   const relationships = useMemo(() => {
     const result: DisplayRelationship[] = [];
+    const directories = new Set(graph.structure.nodes
+      .filter((node) => node.kind === "directory")
+      .map((node) => node.path));
     for (const [relationshipIndex, relationship] of documentRelationships(graph).entries()) {
       if (relationship.source === document.path) {
+        const path = typeof relationship.target === "string"
+          ? relationship.target : relationship.target.path;
+        const directory = directories.has(path);
         result.push({
           relationship,
           relationshipIndex,
-          path: typeof relationship.target === "string" ? relationship.target : undefined,
+          path: typeof relationship.target === "string" || directory ? path : undefined,
           label: displayTarget(relationship),
           incoming: false,
+          directory,
         });
       } else if (relationship.target === document.path) {
         result.push({
@@ -781,6 +789,7 @@ export const DocumentInspector = memo(function DocumentInspector({
           path: relationship.source,
           label: relationship.source,
           incoming: true,
+          directory: directories.has(relationship.source),
         });
       }
     }
@@ -830,8 +839,8 @@ export const DocumentInspector = memo(function DocumentInspector({
             return (
               <div className="relationship-group" key={type}>
                 <h3 style={{ color: style.color }}>{style.label} ({entries.length})</h3>
-                {entries.map(({ relationship, relationshipIndex, path, label, incoming }, index) => {
-                  const external = isExternalTarget(relationship.target);
+                {entries.map(({ relationship, relationshipIndex, path, label, incoming, directory }, index) => {
+                  const external = isExternalTarget(relationship.target) && !directory;
                   const target: InspectionTarget = {
                     kind: "relationship",
                     index: relationshipIndex,
@@ -863,7 +872,7 @@ export const DocumentInspector = memo(function DocumentInspector({
                       >
                         <ArrowIcon />
                       </span>
-                      <FileIcon />
+                      {directory ? <FolderIcon /> : <FileIcon />}
                       <span className="relationship-row__label">{label}</span>
                       {external ? <span className="relationship-row__kind">external</span> : null}
                     </button>

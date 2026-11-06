@@ -16,6 +16,8 @@ accounts, artificial territories, or translation cost.
 ## Questions
 
 - What question or reader treatment gives this perspective its identity?
+- Can that reader understand the problem, reasoning, consequences, and limits
+  at this level without first reconstructing the project's internal workflow?
 - Are two accounts genuinely different views or merely repeated conclusions?
 - Where must perspectives agree, and where may they remain plural?
 - Does one perspective refine, explain, challenge, or realize another?
@@ -30,3 +32,9 @@ explanatory views are possible realizations, not prescribed role families.
 When one perspective is authoritative over another, make that relation clear.
 When none is authoritative, do not create a hierarchy merely to simplify the
 diagram.
+
+Accurate detail can still obscure a perspective's purpose. Preserve the causal
+explanation and meaningful tradeoffs; move procedural or mechanical detail to
+its owner when it interrupts that explanation. Shared subjects do not by
+themselves make perspectives duplicates, and shorter prose is not necessarily
+clearer.

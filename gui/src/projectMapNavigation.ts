@@ -96,6 +96,18 @@ export function projectMapFor(graph: GraphData): ProjectMap {
   return map;
 }
 
+/** Reveal a linked folder, including leaves that cannot open a deeper layer. */
+export function projectMapFolderFocus(map: ProjectMap, path: string) {
+  const folder = map.components.find(component => component.kind === "directory" &&
+    component.binding?.kind === "directory" && component.binding.value === path);
+  if (!folder) return undefined;
+  if (folder.id === map.root || map.components.some(component => component.parent === folder.id)) {
+    return { focusId: folder.id, depth: 1, fitGraph: true };
+  }
+  if (!folder.parent) return undefined;
+  return { focusId: folder.parent, depth: 1, fitComponentIds: [folder.id] };
+}
+
 /** An explicit navigation action: reveal Opening in its ordinary hierarchy. */
 export function projectMapOpeningFocus(map: ProjectMap, opening: Opening) {
   if (!opening.files.length) return undefined;

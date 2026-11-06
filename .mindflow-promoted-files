@@ -159,6 +159,7 @@ skills/structuralist/SKILL.md
 skills/structuralist/agents/openai.yaml
 skills/structuralist/assets/recipe/compact/AGENTS.md
 skills/structuralist/assets/recipe/compact/MINDFLOW.yaml
+skills/structuralist/assets/recipe/compact/evidence/browsing-walkthrough.md
 skills/structuralist/assets/recipe/compact/evolve/browsing-evidence.md
 skills/structuralist/assets/recipe/compact/evolve/browsing-question.md
 skills/structuralist/assets/recipe/compact/evolve/browsing-summary.md

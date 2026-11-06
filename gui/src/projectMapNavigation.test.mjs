@@ -12,9 +12,25 @@ import {
   projectMapMaximumDepth,
   projectMapChildrenByParent,
   projectMapOpeningFocus,
+  projectMapFolderFocus,
   projectMapViewingDepth,
   projectMapViewingDepthsWith,
 } from "./projectMapNavigation.ts";
+
+test("Reader folder links enter populated folders and reveal empty folders in their parent", () => {
+  const directory = (id, path, parent) => ({ id, kind: "directory", parent,
+    binding: { kind: "directory", value: path } });
+  const map = { root: "root", components: [
+    directory("root", "."), directory("docs", "docs", "root"),
+    directory("empty", "docs/empty", "docs"),
+    { id: "intro", kind: "document", parent: "docs", binding: { kind: "path", value: "docs/intro.md" } },
+  ] };
+  assert.deepEqual(projectMapFolderFocus(map, "docs"), { focusId: "docs", depth: 1, fitGraph: true });
+  assert.deepEqual(projectMapFolderFocus(map, "docs/empty"), { focusId: "docs", depth: 1, fitComponentIds: ["empty"] });
+  assert.deepEqual(projectMapFolderFocus(map, "."), { focusId: "root", depth: 1, fitGraph: true });
+  assert.equal(projectMapFolderFocus(map, "docs/intro.md"), undefined);
+  assert.equal(projectMapFolderFocus(map, "missing"), undefined);
+});
 
 const components = [
   {

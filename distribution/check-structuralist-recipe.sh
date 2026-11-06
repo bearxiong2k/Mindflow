@@ -86,6 +86,7 @@ def check_example(root, opening_id):
     assert "roles" not in region and "project_map" not in region
 
     manifest = yaml_document(root / "MINDFLOW.yaml")
+    assert manifest["components"]["browsing_walkthrough"]["path"] == "evidence/browsing-walkthrough.md"
     for identity, component in manifest["components"].items():
         path = root / component["path"]
         if path.suffix == ".md":
@@ -158,5 +159,5 @@ with tempfile.TemporaryDirectory(prefix="mindflow-structuralist-recipe-") as tmp
     assert relation in edges([i["relationship"] for i in scope["incidences"]])
 
 print("Structuralist compact and extended recipes validate: exact prose, links, "
-      "summary children, independent Opening, and scoped relationships")
+      "separate evidence, summary children, independent Opening, and scoped relationships")
 PY

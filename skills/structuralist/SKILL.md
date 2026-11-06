@@ -24,6 +24,12 @@ what the project produces or operates and who owns the affected meaning.
 Inspect enough of the present system and its dependencies to understand the
 task; do not infer the whole from filenames or a search sample.
 
+Read how the project currently directs this kind of work. Its maintained
+instructions and authorized human direction govern goals, methods, evidence,
+and stopping conditions. Help revise that practice when the task calls for it;
+do not substitute the recipe's cycle for it. A project's phase or problem can
+change which movements are useful and how they are combined.
+
 Distinguish the language through which the project understands, directs, and
 evolves itself from the artifacts it produces. A template, manual, or other
 textual deliverable does not become project authority merely because it is
@@ -52,17 +58,19 @@ from the recipe alone never justifies a split or trim.
 
 ## Realize the practice when needed
 
-Use [practice-realization.md](references/practice-realization.md) for exact
-Mindflow operations and the short responsibility glossary. For a bounded Event
-authoring or summarization task, go directly to its
+Use [practice-realization.md](references/practice-realization.md) for applying
+the patterns within project-owned practice, judging evidence and claims, and
+exact Mindflow operations. For a bounded Event authoring or summarization task,
+go directly to its
 [Event guidance](references/practice-realization.md#authoring-event-discussions-and-summaries);
 load a pattern only when a substantive judgment needs it.
 
 Use [recipe.md](references/recipe.md) when a concrete comparison would help
 choose or adapt responsibilities. It presents a compact example and optional
-extensions at any project phase. Existing local names and coherent combinations
-remain valid. A request about one responsibility does not require the whole
-recipe.
+extensions, including one complete development cycle. The worked sequence
+illustrates local choices at one moment, not phases other projects must follow.
+Existing local names and coherent combinations remain valid. A request about
+one responsibility does not require the whole recipe.
 
 Inspect `assets/recipe/` only for requested materialization or adaptation. The
 example illustrates choices; it supplies neither a target project's history

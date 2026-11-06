@@ -4428,17 +4428,53 @@ button:focus-visible,
 }
 
 .markdown-reader {
+  --reader-font-size: 15px;
   padding: 21px 20px 23px;
   border-bottom: 1px solid var(--line-strong);
   background: #ffffff;
   color: #29384d;
   font-family: Georgia, Cambria, "Times New Roman", serif;
-  font-size: 13px;
-  line-height: 1.58;
+  font-size: var(--reader-font-size);
+  line-height: 1.65;
   /* Prefer normal word and punctuation boundaries; only split an otherwise
      overflowing token (for example a URL or inline identifier) as a fallback. */
   word-break: normal;
   overflow-wrap: anywhere;
+  text-autospace: normal;
+}
+
+.markdown-reader__content {
+  /* The middle track measures prose in the body font, including headings with
+     a different font size. Wide technical blocks can use the entire reader. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(100%, 72ch) minmax(0, 1fr);
+}
+
+.markdown-reader__content > * {
+  grid-column: 2;
+  min-width: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+
+.markdown-reader__content > :is(pre, table, .reader-math--display, .mermaid-diagram) {
+  grid-column: 1 / -1;
+}
+
+.markdown-reader :is(p, li, blockquote) {
+  /* Native paragraph layout reflows without reparsing Markdown. Unsupported
+     engines retain ordinary wrapping; authored hard breaks remain intact. */
+  text-wrap-style: pretty;
+}
+
+.markdown-reader :is(h1, h2, h3) {
+  text-wrap-style: balance;
+}
+
+.markdown-reader :is(pre, code, kbd, .katex, .mermaid-diagram) {
+  text-autospace: no-autospace;
+  /* The longhand preserves preformatted text's existing nowrap mode. */
+  text-wrap-style: auto;
 }
 
 .markdown-reader__content > :first-child {
@@ -4447,11 +4483,6 @@ button:focus-visible,
 
 .markdown-reader__content > :last-child {
   margin-bottom: 0;
-}
-
-.markdown-reader__content > * {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 72px;
 }
 
 .markdown-reader h1,
@@ -4463,30 +4494,43 @@ button:focus-visible,
   color: #101a2c;
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.22;
+  line-height: 1.3;
   letter-spacing: -0.025em;
 }
 
 .markdown-reader h1 {
   margin: 0 0 15px;
-  font-size: 20px;
+  font-size: 1.7em;
 }
 
 .markdown-reader h2 {
   margin: 22px 0 8px;
-  font-size: 14px;
+  font-size: 1.3em;
 }
 
 .markdown-reader h3 {
   margin: 18px 0 7px;
-  font-size: 12px;
+  font-size: 1.1em;
 }
 
 .markdown-reader h4,
 .markdown-reader h5,
 .markdown-reader h6 {
   margin: 16px 0 6px;
-  font-size: 11px;
+  font-size: 1em;
+}
+
+/* Grid-item margins do not collapse with the preceding paragraph's margin. */
+.markdown-reader__content > h2 {
+  margin-top: 10px;
+}
+
+.markdown-reader__content > h3 {
+  margin-top: 6px;
+}
+
+.markdown-reader__content > :is(h4, h5, h6) {
+  margin-top: 4px;
 }
 
 .markdown-reader h5,
@@ -4955,7 +4999,7 @@ button:focus-visible,
   color: #41546a;
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 11px;
+  font-size: 0.9375em;
 }
 
 .markdown-reader blockquote.markdown-alert > :last-child {
@@ -4965,7 +5009,7 @@ button:focus-visible,
 .markdown-reader .markdown-alert__title {
   margin-bottom: 5px;
   color: #245f94;
-  font-size: 10px;
+  font-size: 0.85em;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -5030,6 +5074,10 @@ button:focus-visible,
   font-weight: 700;
 }
 
+.markdown-reader details > summary {
+  font-size: 0.875em;
+}
+
 .reader-source-fallback pre {
   max-height: min(52vh, 520px);
   margin: 8px 0 0;
@@ -5055,7 +5103,7 @@ button:focus-visible,
   border-collapse: collapse;
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 10px;
+  font-size: 0.875em;
 }
 
 .markdown-reader th,

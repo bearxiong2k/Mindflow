@@ -10,6 +10,7 @@ import {
 import {
   inspectReaderTarget,
   loadReaderWindow,
+  navigateReaderFolder,
   presentReaderWindow,
 } from "./api";
 import { readerContentId, type ReaderNavigationMode } from "./readerNavigation";
@@ -140,6 +141,12 @@ export function ReaderApp() {
       if (!snapshot) return;
       setNavigationError(undefined);
       try {
+        if (snapshot.graph.structure.nodes.some(
+          (node) => node.path === path && node.kind === "directory",
+        )) {
+          await navigateReaderFolder(path);
+          return;
+        }
         await presentReaderWindow(
           snapshot.root,
           path,

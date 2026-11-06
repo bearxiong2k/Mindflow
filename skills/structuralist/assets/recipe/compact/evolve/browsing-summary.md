@@ -12,5 +12,9 @@ does not establish a universal preference for recency. The
 [comparison question](browsing-evidence.md#remaining-question) remains open.
 
 The finer Events retain the alternatives and evidence behind this synthesis.
+The [evidence account](../evidence/browsing-walkthrough.md) keeps the walkthrough
+separately reviewable. Its limited result also refined the project's working
+practice toward complete reading tasks rather than navigation effort alone.
+The default-view choice is settled at its owner while comparison stays open.
 This summary groups their reasoning; it declares neither completion of the
 project nor an Opening-file transition.
