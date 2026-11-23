@@ -4,6 +4,31 @@ This file records user-visible changes in the official Mindflow release
 entrance. Living design and implementation development occurs in a separate
 private laboratory; this repository receives reviewed source releases.
 
+## [2026.11.23](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.23) — Reader and Event authoring prerelease
+
+- Adds Reader window pinning to keep a selected Reader above other windows.
+  Each new Reader starts unpinned; pinning stays local to that window.
+- Adds Reader font controls from 12px to 24px, with a one-click reset to the
+  15px default. Readers share a locally saved font preference; text reflows
+  without reloading the document.
+- Adds `register-event` through the CLI's reviewed `change plan` / `change apply`
+  workflow. It registers an existing Markdown discussion, appends it at the
+  Present end or beneath a named summary, and normalizes registry definitions
+  while preserving existing root/child order, transitions, and current Opening.
+- Warns when Event registry order differs from nested reading order, helping
+  expose authoring mistakes that can disrupt Git evidence placement. Also warns
+  when an indexed Markdown document's non-root folder lacks registration.
+  These warnings do not invalidate otherwise valid projects or infer intent.
+- Includes regression coverage for Event registration, stale proposals, preserved
+  history evidence, warning behavior, and Reader font preferences.
+
+The CLI and app report `2026.11.23`; project format remains `2026-10-27`.
+Existing current-format projects need no conversion, and installation does not
+change their recorded adoption. Source and standalone Structuralist archives
+include installation guidance, license notices, and SHA-256 checksums. The
+optional GUI is built locally; no prebuilt application is included. The existing
+[beta limitations](https://github.com/bearxiong2k/Mindflow/blob/v2026.11.23/docs/gui.md#beta-limitations) still apply.
+
 ## [2026.11.6-r1](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6-r1) — Structuralist working guide prerelease
 
 - Recasts the Structuralist recipe as a working documentation guide with

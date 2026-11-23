@@ -31,6 +31,10 @@ Author Event discussions as ordinary registered Markdown files, with grouping
 and optional Opening transitions in the manifest. Follow
 [Project format](docs/project-format.md); current Opening remains independent of that recorded flow. The GUI reads these
 files. Do not invent Event records from every edit or commit.
+For a new discussion, the CLI's reviewed `register-event` proposal can register
+its existing file and append it at the Present end or under a named summary.
+Inspect the manifest diff before applying; follow [CLI](docs/cli.md) for exact
+usage and the nonblocking Event-order and indexed-folder warnings.
 
 Follow the target project's maintained working practice for methods, evidence,
 and stopping conditions. The Structuralist recipe supplies working documentation

@@ -1,7 +1,7 @@
 # CLI
 
 The CLI reconstructs one project-owned Region from ordinary files, its manifest,
-and Git. Commands below describe source release `2026.11.6`. Use
+and Git. Commands below describe source release `2026.11.23`. Use
 `mindflow --help` and each subcommand's `--help` for exact options.
 
 ## Select a project and inspect it
@@ -93,11 +93,43 @@ Anchor vocabulary and exact paths at the stored revision.
 refuses an existing manifest. Ordinary manifest and file edits are supported;
 validate their complete result with `check --json`.
 
-For the narrow typed `open-opening-branch` operation, `change plan --input-json
-FILE` produces a proposal and `change apply --input-json FILE` applies a matching
-proposal. It changes the current Opening and leaves Evolve untouched; author
-Events through ordinary Markdown and manifest edits. This is not a general
-document editor. Consult command help before using it; an invalid or stale proposal writes nothing.
+Two narrow operations use `change plan` and `change apply`:
+
+- `open-opening-branch` changes current Opening and leaves Evolve untouched.
+- `register-event` registers an existing Markdown discussion as an Event. It
+  appends a root at the Present end, or appends a child under an explicitly
+  named existing Event.
+
+Write the Markdown file first, then save this operation as `register-event.json`
+outside the project root:
+
+```json
+{"operation":"register-event","component":"new_discussion","file":"evolve/new-discussion.md"}
+```
+
+From the project root, generate a proposal outside the project, inspect its
+manifest diff, then apply the exact reviewed proposal:
+
+```sh
+mindflow change plan --input-json /path/to/register-event.json > /path/to/proposal.json
+# Review proposal.json before applying it.
+mindflow change apply --input-json /path/to/proposal.json
+mindflow check --json
+```
+
+Add `"parent_event":"summary_id"` to append under that summary; an optional
+`description` describes a new component. An existing non-index registration
+can be reused with its exact component ID and path. The proposal puts all Event
+definitions in reading order while preserving existing root and child order,
+transitions, and current Opening. It creates no prose or Opening transitions
+and does not register containing folders. Invalid or stale proposals write
+nothing; inspect a new plan if project inputs have changed.
+
+`check` warns with `evolve-registry-order` when definitions differ from nested
+reading order, and with `unmanaged-indexed-directory` when an indexed Markdown
+document's non-root parent is unregistered. These are authoring advice, not
+validation errors. Review the intended order or folder membership before
+editing; dates and folders never automatically choose Event meaning.
 
 `mindflow update-handoff` prints release-specific manual adoption guidance. It
 works without loading an old project and rejects `--root`. There is no automatic

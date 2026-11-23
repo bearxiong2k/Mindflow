@@ -64,6 +64,15 @@ impl Diagnostic {
             message: message.into(),
         }
     }
+
+    fn warning(code: &str, path: impl Into<Option<String>>, message: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Warning,
+            code: code.to_owned(),
+            path: path.into(),
+            message: message.into(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -154,6 +163,14 @@ pub enum ChangeOperation {
         description: Option<String>,
         relationship_parent: String,
         relationship_type: String,
+    },
+    RegisterEvent {
+        component: String,
+        file: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent_event: Option<String>,
     },
 }
 
@@ -1115,6 +1132,12 @@ impl Project {
                 &mut diagnostics,
             );
         }
+        let registered_paths: BTreeSet<_> = self
+            .manifest
+            .components
+            .values()
+            .map(|registration| registration.path.as_str())
+            .collect();
         let mut paths = BTreeSet::new();
         for (id, registration) in self.registrations() {
             let path = &registration.path;
@@ -1172,6 +1195,24 @@ impl Project {
                         format!("cannot read exact Markdown bytes for `{path}`"),
                     ),
                 }
+            }
+            let parent = directory_parent(path);
+            if registration.index
+                && document
+                && parent != "."
+                && !registered_paths.contains(parent)
+                && self.repository_files.contains(path)
+                && !self.ignored.contains(path)
+                && matches!(
+                    self.document_sources.get(path),
+                    Some(CapturedDocument::Text(_))
+                )
+            {
+                diagnostics.push(Diagnostic::warning(
+                    "unmanaged-indexed-directory",
+                    Some(path.clone()),
+                    format!("index `{id}` has unregistered parent directory `{parent}`, which appears as context in Structure; register that directory if it should be a managed component"),
+                ));
             }
         }
         let mut seen = BTreeSet::new();
@@ -1270,12 +1311,13 @@ impl Project {
         }
         let before_events = diagnostics.len();
         self.validate_events(&mut diagnostics);
-        let valid_event_forest = diagnostics.len() == before_events;
+        let valid_event_forest = !Self::has_errors(&diagnostics[before_events..]);
         self.validate_event_opening(&mut diagnostics, valid_event_forest);
         self.validate_anchors(&mut diagnostics);
         diagnostics
     }
     fn validate_events(&self, diagnostics: &mut Vec<Diagnostic>) {
+        let before = diagnostics.len();
         let mut error = |code: &str, message: String| {
             diagnostics.push(Diagnostic::error(
                 code,
@@ -1376,6 +1418,19 @@ impl Project {
                 }
             }
         }
+        if !Self::has_errors(&diagnostics[before..]) {
+            if let Some((position, expected)) = event_preorder_indices(events)
+                .into_iter()
+                .enumerate()
+                .find(|(position, expected)| position != expected)
+            {
+                diagnostics.push(Diagnostic::warning(
+                    "evolve-registry-order",
+                    Some(MANIFEST_FILENAME.into()),
+                    format!("evolve.events differs from depth-first reading order at position {}: found `{}`, expected `{}`; place each summary before its complete child subtrees in children order, preserving authored root order; mismatched registry prefixes may leave Git evidence unplaced", position + 1, events[position].component, events[expected].component),
+                ));
+            }
+        }
     }
 
     fn validate_event_opening(&self, diagnostics: &mut Vec<Diagnostic>, valid_forest: bool) {
@@ -1451,21 +1506,9 @@ impl Project {
         // The current Opening is independent; unrecorded later edits are not
         // invented as Events or used to rewrite this flow.
         let events = &self.manifest.evolve.events;
-        let by_id: BTreeMap<_, _> = events
-            .iter()
-            .map(|event| (event.component.as_str(), event))
-            .collect();
-        let children: BTreeSet<_> = events
-            .iter()
-            .flat_map(|event| event.children.iter().map(String::as_str))
-            .collect();
-        let mut stack: Vec<_> = events
-            .iter()
-            .filter(|event| !children.contains(event.component.as_str()))
-            .rev()
-            .collect();
         let mut open = BTreeMap::<&str, bool>::new();
-        while let Some(event) = stack.pop() {
+        for index in event_preorder_indices(events) {
+            let event = &events[index];
             if let Some(transition) = &event.opening {
                 for id in &transition.predecessors {
                     if open.get(id.as_str()) == Some(&false) {
@@ -1488,9 +1531,6 @@ impl Project {
                     open.insert(id, true);
                 }
             }
-            for child in event.children.iter().rev() {
-                stack.push(by_id[child.as_str()]);
-            }
         }
     }
     pub fn plan_change(&self, operation: ChangeOperation) -> Result<ChangeProposal> {
@@ -1505,46 +1545,120 @@ impl Project {
             )
         })?;
         let mut manifest = self.manifest.clone();
-        let ChangeOperation::OpenOpeningBranch {
-            component,
-            file,
-            description,
-            relationship_parent,
-            relationship_type,
-        } = &operation;
-        if !valid_component_id(component)
-            || manifest.components.contains_key(component)
-            || manifest.historical_components.contains_key(component)
-        {
-            bail!("new component identity must be valid and unused");
-        }
-        validate_managed_file_path(file)
-            .map_err(|m| anyhow!("invalid Opening branch file: {m}"))?;
-        if manifest.components.values().any(|c| c.path == *file) {
-            bail!("Opening branch file is already managed");
-        }
-        if !manifest.opening.files.contains(relationship_parent) {
-            bail!("relationship parent must be a current Opening document");
-        }
-        let parent = &manifest.components[relationship_parent];
-        if directory_parent(file) != directory_parent(&parent.path) {
-            bail!("Opening branch must share its peer's actual immediate directory");
-        }
-        manifest.components.insert(
-            component.clone(),
-            ComponentRegistration {
-                path: file.clone(),
-                description: description.clone(),
-                index: false,
-            },
-        );
-        manifest.relationships.push(StructureRelationship {
-            source: component.clone(),
-            target: relationship_parent.clone(),
-            relationship_type: relationship_type.clone(),
-            direction: RelationshipDirection::SourceToTarget,
-        });
-        manifest.opening.files.push(component.clone());
+        let file = match &operation {
+            ChangeOperation::OpenOpeningBranch {
+                component,
+                file,
+                description,
+                relationship_parent,
+                relationship_type,
+            } => {
+                if !valid_component_id(component)
+                    || manifest.components.contains_key(component)
+                    || manifest.historical_components.contains_key(component)
+                {
+                    bail!("new component identity must be valid and unused");
+                }
+                validate_managed_file_path(file)
+                    .map_err(|m| anyhow!("invalid Opening branch file: {m}"))?;
+                if manifest.components.values().any(|c| c.path == *file) {
+                    bail!("Opening branch file is already managed");
+                }
+                if !manifest.opening.files.contains(relationship_parent) {
+                    bail!("relationship parent must be a current Opening document");
+                }
+                let parent = &manifest.components[relationship_parent];
+                if directory_parent(file) != directory_parent(&parent.path) {
+                    bail!("Opening branch must share its peer's actual immediate directory");
+                }
+                manifest.components.insert(
+                    component.clone(),
+                    ComponentRegistration {
+                        path: file.clone(),
+                        description: description.clone(),
+                        index: false,
+                    },
+                );
+                manifest.relationships.push(StructureRelationship {
+                    source: component.clone(),
+                    target: relationship_parent.clone(),
+                    relationship_type: relationship_type.clone(),
+                    direction: RelationshipDirection::SourceToTarget,
+                });
+                manifest.opening.files.push(component.clone());
+                file
+            }
+            ChangeOperation::RegisterEvent {
+                component,
+                file,
+                description,
+                parent_event,
+            } => {
+                if !valid_component_id(component)
+                    || manifest.historical_components.contains_key(component)
+                {
+                    bail!("Event component identity must be valid and distinct from historical identities");
+                }
+                validate_managed_file_path(file).map_err(|m| anyhow!("invalid Event file: {m}"))?;
+                if manifest
+                    .evolve
+                    .events
+                    .iter()
+                    .any(|event| event.component == *component)
+                {
+                    bail!("component `{component}` is already an Event");
+                }
+                if let Some(existing) = manifest.components.get(component) {
+                    if existing.path != *file || existing.index {
+                        bail!(
+                            "existing Event component must bind the same non-index Markdown file"
+                        );
+                    }
+                    if description.is_some() && *description != existing.description {
+                        bail!("existing component description must be preserved; omit description or supply its current value");
+                    }
+                } else {
+                    if manifest
+                        .components
+                        .values()
+                        .any(|entry| entry.path == *file)
+                    {
+                        bail!("Event file is already managed under a different component identity");
+                    }
+                    manifest.components.insert(
+                        component.clone(),
+                        ComponentRegistration {
+                            path: file.clone(),
+                            description: description.clone(),
+                            index: false,
+                        },
+                    );
+                }
+                if let Some(parent) = parent_event {
+                    let parent = manifest
+                        .evolve
+                        .events
+                        .iter_mut()
+                        .find(|event| event.component == *parent)
+                        .ok_or_else(|| {
+                            anyhow!("parent_event `{parent}` must be an existing Event")
+                        })?;
+                    parent.children.push(component.clone());
+                }
+                manifest.evolve.events.push(EvolveEvent {
+                    component: component.clone(),
+                    children: Vec::new(),
+                    opening: None,
+                });
+                // Preserve authored reading order while keeping definitions together.
+                // Any normalization is part of the exact, reviewable proposal diff.
+                manifest.evolve.events = event_preorder_indices(&manifest.evolve.events)
+                    .into_iter()
+                    .map(|index| manifest.evolve.events[index].clone())
+                    .collect();
+                file
+            }
+        };
         let source = serde_norway::to_string(&manifest)?;
         let candidate = self.candidate(&source)?;
         candidate
@@ -2324,6 +2438,39 @@ fn captured_utf8(mut file: File) -> CapturedDocument {
         Ok(content) => CapturedDocument::Text(content),
         Err(_) => CapturedDocument::NonUtf8,
     }
+}
+
+/// Full reading order for a previously validated forest. Iterative so the
+/// validation and registration paths do not depend on recursive call depth.
+fn event_preorder_indices(events: &[EvolveEvent]) -> Vec<usize> {
+    let by_id: BTreeMap<_, _> = events
+        .iter()
+        .enumerate()
+        .map(|(index, event)| (event.component.as_str(), index))
+        .collect();
+    let children: BTreeSet<_> = events
+        .iter()
+        .flat_map(|event| event.children.iter().map(String::as_str))
+        .collect();
+    let mut stack: Vec<_> = events
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| !children.contains(event.component.as_str()))
+        .map(|(index, _)| index)
+        .rev()
+        .collect();
+    let mut order = Vec::with_capacity(events.len());
+    while let Some(index) = stack.pop() {
+        order.push(index);
+        stack.extend(
+            events[index]
+                .children
+                .iter()
+                .rev()
+                .map(|id| by_id[id.as_str()]),
+        );
+    }
+    order
 }
 
 fn exact_event_prefix_boundary(

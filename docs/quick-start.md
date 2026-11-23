@@ -70,6 +70,10 @@ or an agent's judgment is correct.
 Write the discussion in an ordinary Markdown file, register its stable component
 ID, and select that ID in `evolve.events`. A summary can list finer Event IDs as
 its `children`; an optional `opening` record adds explicit file transitions.
+Alternatively, use the CLI's reviewed
+[`register-event` proposal](cli.md#initialization-and-deliberate-changes) after
+writing the file. It appends at the Present end or under a parent you name and
+keeps registry definitions in nested reading order.
 A discussion may remain unresolved. A summary explains the shared question,
 evidence, changed understanding, and what remains open; accepted commitments
 stay with their current owners. See [Project format](project-format.md) for the

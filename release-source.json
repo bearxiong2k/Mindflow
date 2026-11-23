@@ -1,16 +1,16 @@
 {
   "format": 2,
-  "release": "2026.11.6",
+  "release": "2026.11.23",
   "source_repository": "https://github.com/bearxiong2k/Mindflow-lab",
-  "source_revision": "c5e2b47cc3200374229eec1b95c0e264c077cc04",
-  "source_tree": "34980a948cfe1a863541e73506fee8c52700bc91",
+  "source_revision": "f00c56f00a518da3f919db8bc86e67c91f1d4bd2",
+  "source_tree": "56649a014278aa98956ac8320cdffcab3be00998",
   "promoted_files": ".mindflow-promoted-files",
   "components": {
-    "core_cli": "2026.11.6",
-    "gui": "2026.11.6",
+    "core_cli": "2026.11.23",
+    "gui": "2026.11.23",
     "structuralist": {
       "package": "structuralist",
-      "version": "2026.11.6",
+      "version": "2026.11.23",
       "path": "skills/structuralist"
     }
   }

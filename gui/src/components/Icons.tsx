@@ -41,6 +41,14 @@ export function HelpIcon({ size = 16, ...props }: IconProps) {
   );
 }
 
+export function PinIcon({ size = 16, ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} {...props} {...common}>
+      <path d="M8 3h8M9 3v6l-3 4v2h12v-2l-3-4V3M12 15v6" />
+    </svg>
+  );
+}
+
 export function FitIcon({ size = 17, ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} {...props} {...common}>

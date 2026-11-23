@@ -28,6 +28,7 @@ gui/src-tauri/build.rs
 gui/src-tauri/capabilities/app-identity.json
 gui/src-tauri/capabilities/reader-events.json
 gui/src-tauri/capabilities/reader-fullscreen.json
+gui/src-tauri/capabilities/reader-presentation.json
 gui/src-tauri/icons/128x128.png
 gui/src-tauri/icons/128x128@2x.png
 gui/src-tauri/icons/32x32.png
@@ -72,6 +73,7 @@ gui/src/components/ProjectMapMermaidCanvas.tsx
 gui/src/components/ProjectMapView.tsx
 gui/src/components/ProjectTabs.tsx
 gui/src/components/QcWindowSelector.tsx
+gui/src/components/ReaderControls.tsx
 gui/src/components/RegionOverview.tsx
 gui/src/components/SshOpenDialog.tsx
 gui/src/components/SvgTextBox.tsx
@@ -130,6 +132,8 @@ gui/src/readerMarkdown.test.mjs
 gui/src/readerMarkdown.ts
 gui/src/readerNavigation.ts
 gui/src/readerPerformance.test.mjs
+gui/src/readerPreferences.test.mjs
+gui/src/readerPreferences.ts
 gui/src/readerSurface.ts
 gui/src/readerWindowEvents.ts
 gui/src/sshBrowser.test.mjs
@@ -191,6 +195,7 @@ src/update-handoff.md
 src/version.rs
 src/yaml.rs
 tests/documentation_qc_cache.rs
+tests/event_authoring.rs
 tests/evolve_events.rs
 tests/observation.rs
 tests/update_handoff.rs

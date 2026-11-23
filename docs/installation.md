@@ -1,21 +1,20 @@
 # Installation
 
-The [2026.11.6-r1 beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6-r1) ships source and the complete
+The [2026.11.23 beta prerelease](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.23) ships source and the complete
 Structuralist package. It does not provide prebuilt native applications.
-The `-r1` suffix identifies this publication; the CLI and app still report
-version `2026.11.6`.
+The CLI and app report version `2026.11.23`.
 
 ## Get the source
 
 Clone the public repository at the release tag:
 
 ```sh
-git clone --branch v2026.11.6-r1 https://github.com/bearxiong2k/Mindflow.git
+git clone --branch v2026.11.23 https://github.com/bearxiong2k/Mindflow.git
 cd Mindflow
 ```
 
-Alternatively, download and extract the [tagged source archive](https://github.com/bearxiong2k/Mindflow/archive/refs/tags/v2026.11.6-r1.tar.gz)
-or the source asset from the [prerelease page](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.6-r1), then open a terminal
+Alternatively, download and extract the [tagged source archive](https://github.com/bearxiong2k/Mindflow/archive/refs/tags/v2026.11.23.tar.gz)
+or the source asset from the [prerelease page](https://github.com/bearxiong2k/Mindflow/releases/tag/v2026.11.23), then open a terminal
 in its extracted root. Use the tagged Git checkout for the optional GUI build
 and for Git-history inspection.
 
@@ -35,7 +34,7 @@ mindflow --version
 
 Cargo installs into its configured binary directory, normally `~/.cargo/bin`.
 Ensure that directory is on `PATH`. `mindflow --version` must report release
-`2026.11.6` and format `2026-10-27`. Installation does not change another
+`2026.11.23` and format `2026-10-27`. Installation does not change another
 project. Cargo installation works from a source archive without `.git`.
 
 Mindflow project inspection requires a Git worktree. For an extracted archive,

@@ -6,11 +6,11 @@ entry kinds, and hierarchy. [Semantics](semantics.md) explains their meaning.
 
 ## Empty Region
 
-`mindflow init` writes this empty carrier for release `2026.11.6`:
+`mindflow init` writes this empty carrier for release `2026.11.23`:
 
 ```yaml
 format: "2026-10-27"
-adopted-release: "2026.11.6"
+adopted-release: "2026.11.23"
 components: {}
 relationship-types: {}
 relationships: []
@@ -37,7 +37,7 @@ complete manifest over those files:
 
 ```yaml
 format: "2026-10-27"
-adopted-release: "2026.11.6"
+adopted-release: "2026.11.23"
 components:
   overview:
     path: README.md
@@ -98,6 +98,11 @@ Git-visible rather than ignored. Symbolic links are not registered targets.
 Registration is per entry: a registered directory does not include its children.
 Markdown paths end in `.md`; other regular files remain coarse targets.
 
+An indexed Markdown document normally introduces its registered immediate
+folder. `check` warns if that non-root folder is unregistered; this does not
+invalidate the Region or require registering all ancestors. Root indexes are
+exempt, and ordinary non-index documents can use unregistered folder context.
+
 Relationship direction is `source-to-target` or `bidirectional` and must satisfy
 its type. Duplicate relationships are invalid. Use ordinary Markdown links for
 cross-folder references instead of inventing cross-folder semantic edges.
@@ -109,6 +114,15 @@ Every child must also occur once in the Event registry. Each Event has at most
 one parent, with no cycles or repeated children. Roots follow registry order;
 children follow the parent's list. At most 4096 Events and 32 hierarchy levels
 are supported. Grouping does not change filesystem containment.
+
+Keep Event definitions in that depth-first reading order: parent first, then
+each child subtree in its authored order, then the next root. `check` warns
+about a mismatch because Git evidence placement compares registry prefixes.
+Neither dates nor file names infer chronology. The optional
+[`register-event` proposal](cli.md#initialization-and-deliberate-changes) appends
+a new discussion at the root tail or under a named parent and normalizes the
+registry without changing existing root or child order. Ordinary manifest
+editing remains supported.
 
 A discussion can omit `opening` entirely. When present, each side of its
 transition contains distinct current non-index Markdown IDs or explicit

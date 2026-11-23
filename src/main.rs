@@ -321,7 +321,7 @@ enum EvolveCommand {
 
 #[derive(Debug, Subcommand)]
 enum ChangeCommand {
-    /// Validate one typed operation and emit its exact carrier proposal.
+    /// Preview an open-opening-branch or register-event operation as an exact carrier proposal.
     Plan {
         /// Read the operation JSON from this path, or `-` for standard input.
         #[arg(long, value_name = "PATH|-", default_value = "-")]

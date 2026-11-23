@@ -14,6 +14,14 @@ import {
   presentReaderWindow,
 } from "./api";
 import { readerContentId, type ReaderNavigationMode } from "./readerNavigation";
+import { ReaderControls } from "./components/ReaderControls";
+import {
+  clampReaderFontSize,
+  defaultReaderFontSize,
+  loadReaderFontSize,
+  readerFontSizeStorageKey,
+  saveReaderFontSize,
+} from "./readerPreferences";
 import { listenForReaderStateChange, type ReaderNavigationEvent } from "./readerWindowEvents";
 import type {
   InspectionTarget,
@@ -40,6 +48,8 @@ export function ReaderApp() {
   const acceptedSnapshotRef = useRef<{ serialized: string; snapshot: ReaderWindowSnapshot } | undefined>(undefined);
   const contentRef = useRef<HTMLElement>(null);
   const previousTargetRef = useRef<string | undefined>(undefined);
+  const unsavedFontSize = useRef(false);
+  const [fontSize, setFontSize] = useState(() => loadReaderFontSize() ?? defaultReaderFontSize);
   const [loadState, setLoadState] = useState<ReaderLoadState>({
     loading: true,
   });
@@ -52,6 +62,29 @@ export function ReaderApp() {
     pointer?: string;
     focus?: string;
   }>({});
+
+  useEffect(() => {
+    const reload = () => {
+      if (unsavedFontSize.current) return;
+      const stored = loadReaderFontSize();
+      if (stored !== undefined) setFontSize(stored);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === readerFontSizeStorageKey || event.key === null) reload();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", reload);
+    reload();
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", reload);
+    };
+  }, []);
+  const changeFontSize = useCallback((size: number) => {
+    const next = clampReaderFontSize(size);
+    setFontSize(next);
+    unsavedFontSize.current = !saveReaderFontSize(next);
+  }, []);
 
   useEffect(() => {
     performance.mark("mindflow:reader:shell-mounted");
@@ -235,15 +268,19 @@ export function ReaderApp() {
   const shellStyle = {
     "--reader-interface-scale": interfaceScale,
     "--reader-shell-height": `${100 / interfaceScale}dvh`,
+    "--reader-font-size": `${fontSize}px`,
   } as CSSProperties;
 
   return (
     <div className="native-reader-shell" style={shellStyle}>
-      {navigationError ? (
-        <div className="native-reader-alert" role="alert">
-          {navigationError}
-        </div>
-      ) : null}
+      <header className="native-reader-header">
+        <ReaderControls fontSize={fontSize} onFontSizeChange={changeFontSize} />
+        {navigationError ? (
+          <div className="native-reader-alert" role="alert">
+            {navigationError}
+          </div>
+        ) : null}
+      </header>
       {snapshot ? (
         <main
           ref={contentRef}
